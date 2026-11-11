@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <termios.h>
 #include <unistd.h>
 
 /* --------------------------------------------------------------- layout */
@@ -28,7 +29,14 @@ int term_cols = 0;
 
 static volatile sig_atomic_t term_resized = 0;
 
+/* Terminal settings saved before switching to non-canonical mode, restored on
+ * every exit path so the shell gets its line editing back. */
+static struct termios saved_termios;
+static int termios_saved = 0;
+
 static void cleanup(void) {
+  if (termios_saved)
+    tcsetattr(STDIN_FILENO, TCSANOW, &saved_termios);
   printf("\033[?25h");
   fflush(stdout);
 }
@@ -42,6 +50,50 @@ static void handle_signal(int sig) {
 static void handle_winch(int sig) {
   (void)sig;
   term_resized = 1;
+}
+
+/* A normal key stops the animation. Function keys, arrow keys and other
+ * escape-sequence keys (which start with ESC) are ignored, as are control-key
+ * combos such as Ctrl-A; Ctrl-C and Ctrl-Z are handled by the tty itself. */
+static int is_stop_key(unsigned char c) {
+  if (c == 0x1b)
+    return 0; /* ESC - start of a function/arrow key sequence */
+  if (c == 0x09 || c == 0x0a || c == 0x0d)
+    return 1; /* Tab, Enter */
+  if (c == 0x08 || c == 0x7f)
+    return 1; /* Backspace */
+  if (c < 0x20)
+    return 0; /* other control keys: leave them alone */
+  return 1;   /* printable character or UTF-8 lead byte */
+}
+
+/* Swallow the rest of an escape sequence (e.g. F1 = ESC O P) so its bytes are
+ * not mistaken for typed characters on the next frame. */
+static void drain_escape_sequence(void) {
+  for (;;) {
+    struct pollfd p = {.fd = STDIN_FILENO, .events = POLLIN};
+    if (poll(&p, 1, 20) <= 0)
+      break;
+    unsigned char b;
+    if (read(STDIN_FILENO, &b, 1) != 1)
+      break;
+  }
+}
+
+/* Returns 1 when a normal key is waiting. Function/arrow keys are consumed and
+ * ignored; the key that stops the animation is consumed too. */
+static int normal_key_pressed(void) {
+  struct pollfd pfd = {.fd = STDIN_FILENO, .events = POLLIN};
+  if (poll(&pfd, 1, 0) <= 0)
+    return 0;
+  unsigned char c;
+  if (read(STDIN_FILENO, &c, 1) != 1)
+    return 0;
+  if (c == 0x1b) {
+    drain_escape_sequence();
+    return 0;
+  }
+  return is_stop_key(c);
 }
 
 static void get_term_size(int *rows, int *cols) {
@@ -445,15 +497,26 @@ void render_run(int show_info, int use_color, int max_frames, int rotate_x,
       render_height = needed;
   }
 
+  /* Read single keypresses while we animate: non-canonical, no echo. The
+   * original settings are restored in cleanup() on every exit path. */
+  if (tcgetattr(STDIN_FILENO, &saved_termios) == 0) {
+    struct termios raw = saved_termios;
+    raw.c_lflag &= ~(ICANON | ECHO);
+    raw.c_cc[VMIN] = 0;
+    raw.c_cc[VTIME] = 0;
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) == 0)
+      termios_saved = 1;
+  }
+
   printf("\033[?25l\033[2J");
   fflush(stdout);
 
   const int smax = shading_count - 1;
 
   for (int frame = 0; max_frames == 0 || frame < max_frames; frame++) {
-    /* Any pending input: leave the keypress for the shell and stop. */
-    struct pollfd pfd = {.fd = STDIN_FILENO, .events = POLLIN};
-    if (poll(&pfd, 1, 0) > 0)
+    /* A normal keypress stops the animation; function keys and other
+     * escape-sequence keys are ignored. */
+    if (normal_key_pressed())
       break;
 
     if (term_resized) {

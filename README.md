@@ -20,8 +20,9 @@ make
 ./nexus
 ```
 
-Press any key to stop (the keypress passes through to the shell, so it works as
-a startup fetch). Ctrl-C works too.
+Press any key to stop. Function keys (F1–F12), arrow keys and other
+escape-sequence keys are ignored, so only ordinary typing keys dismiss it.
+Ctrl-C works too.
 
 ```
 sudo make install            # installs to /usr/local/bin/nexus
@@ -94,12 +95,26 @@ distributions keep the default magenta/white scheme.
 
 ## Shading
 
-Brightness is mapped onto an ASCII ramp, one character per cell. The default
-ramp is `.,-~:;=!*#$@`; override it with `--shading-chars`, for example:
+Brightness is mapped onto a ramp, one character per cell. The built-in ramp is
+`.,-~:;=!*#$@`; override it on the command line:
 
 ```
 ./nexus --shading-chars '#*.'
 ```
+
+or in the config file (see below):
+
+```
+shading_chars = o
+```
+
+## Configuration
+
+On first run nexus writes `~/.config/nexus/nexus.conf` (honouring
+`XDG_CONFIG_HOME`) with a commented template. It is a list of `key = value`
+lines; blank lines and lines starting with `#` are ignored. The only key so far
+is `shading_chars`, whose value `default` restores the built-in ramp.
+Command-line flags win over the config file.
 
 ## Info fields
 
@@ -123,12 +138,17 @@ nexus/
   src/
     nexus.h    shared declarations
     util.c     text / terminal / parsing helpers
+    config.c   config file reader and first-run template
     logo.c     logo loading, decoding and distro tinting
     distros.c  embedded plain-text distro logos (generated)
     info.c     native system-information gathers
     render.c   height map, projection, shading and the animation loop
     main.c     CLI parsing and orchestration
 ```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define NEXUS_VERSION "1.0.0"
+#define NEXUS_VERSION "1.1.0"
 #define NEXUS_CODENAME "Confluence"
 
 #define NEXUS_ANIM_WIDTH 60
@@ -78,6 +78,13 @@ extern char info_lines[NEXUS_MAX_LINES][NEXUS_MAX_LINE_LEN];
 extern int info_line_count;
 
 void info_gather_all(void);
+
+/* -------------------------------------------------------------- config.c */
+/* Create ~/.config/nexus/nexus.conf with a template if it does not exist. */
+void config_ensure(void);
+/* Look up a key in the config file. Returns a pointer to a static buffer, or
+ * NULL when the file or the key is missing. */
+const char *config_get(const char *key);
 
 /* -------------------------------------------------------------- render.c */
 void render_set_shading(const char *chars);

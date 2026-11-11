@@ -9,6 +9,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/utsname.h>
 
 struct nexus_options g_opts;
@@ -48,6 +49,10 @@ static void print_help(void) {
       "                            (default: .,-~:;=!*#$@)\n"
       "  -V, --version             Show version\n"
       "  -h, --help                Show this help\n\n"
+      "Config:\n"
+      "  ~/.config/nexus/nexus.conf is created on first run; one 'key = value'\n"
+      "  per line. Supported key: shading_chars (use 'default' for the built-in\n"
+      "  ramp). Command-line flags win.\n\n"
       "Logo:\n"
       "  --logo <name> shows a distro logo, e.g. '--logo arch'\n"
       "  (fastfetch's library when installed, else the embedded set).\n"
@@ -157,6 +162,15 @@ int main(int argc, char **argv) {
               argv[i]);
       return 1;
     }
+  }
+
+  /* The config file fills in anything not given on the command line. A value
+   * of "default" means the built-in ramp. */
+  config_ensure();
+  if (!shading) {
+    const char *cfg = config_get("shading_chars");
+    if (cfg && cfg[0] && strcasecmp(cfg, "default") != 0)
+      shading = cfg;
   }
 
   render_set_shading(shading);
