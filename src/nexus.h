@@ -14,7 +14,7 @@
 #include <stdio.h>
 
 #define NEXUS_VERSION "1.1.0"
-#define NEXUS_CODENAME "Confluence"
+#define NEXUS_CODENAME "Zenith"
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
