@@ -28,13 +28,6 @@ sudo make install            # installs to /usr/local/bin/nexus
 PREFIX=~/.local make install # ...or into your home
 ```
 
-With Nix (flakes):
-
-```
-nix run github:campbell-nick/nexus
-nix profile install github:campbell-nick/nexus
-```
-
 ## Options
 
 | Flag | Description |

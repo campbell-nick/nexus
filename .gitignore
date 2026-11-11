@@ -2,10 +2,6 @@
 /nexus
 *.o
 
-# nix
-result
-result-*
-
 # editor / OS cruft
 *.swp
 .DS_Store
