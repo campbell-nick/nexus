@@ -30,6 +30,19 @@ static int looks_like_logo_name(const char *s) {
   return 1;
 }
 
+/* Parse a boolean config value. Accepts true/false, yes/no, on/off and 1/0
+ * (case-insensitively); anything else warns and keeps the current value. */
+static int config_bool(const char *key, const char *text, int fallback) {
+  if (strcasecmp(text, "true") == 0 || strcasecmp(text, "yes") == 0 ||
+      strcasecmp(text, "on") == 0 || strcmp(text, "1") == 0)
+    return 1;
+  if (strcasecmp(text, "false") == 0 || strcasecmp(text, "no") == 0 ||
+      strcasecmp(text, "off") == 0 || strcmp(text, "0") == 0)
+    return 0;
+  fprintf(stderr, "nexus: %s must be true or false (got '%s')\n", key, text);
+  return fallback;
+}
+
 static void print_help(void) {
   printf(
       "Usage: nexus [options]\n\n"
@@ -51,8 +64,10 @@ static void print_help(void) {
       "  -h, --help                Show this help\n\n"
       "Config:\n"
       "  ~/.config/nexus/nexus.conf is created on first run; one 'key = value'\n"
-      "  per line. Supported key: shading_chars (use 'default' for the built-in\n"
-      "  ramp). Command-line flags win.\n\n"
+      "  per line. It mirrors every flag above:\n"
+      "    logo, shading_chars, rotation (x|y|both), speed, size, depth,\n"
+      "    height, frames, info (true|false), color (true|false)\n"
+      "  'default' restores a built-in value; command-line flags always win.\n\n"
       "Logo:\n"
       "  --logo <name> shows a distro logo, e.g. '--logo arch'\n"
       "  (fastfetch's library when installed, else the embedded set).\n"
@@ -82,6 +97,12 @@ int main(int argc, char **argv) {
   int max_frames = 0;
   const char *shading = NULL;
 
+  /* Which options the command line set explicitly; the config file fills in
+   * the rest, so flags always win. */
+  int logo_given = 0, rotation_given = 0, speed_given = 0, size_given = 0,
+      depth_given = 0, height_given = 0, frames_given = 0, info_given = 0,
+      color_given = 0, shading_given = 0;
+
   g_opts.height = 0; /* 0 = auto (fit the info block) */
   g_opts.size = 1.0f;
   g_opts.depth = 1.0f;
@@ -100,12 +121,15 @@ int main(int argc, char **argv) {
         return 1;
       }
       logo_path = argv[++i];
+      logo_given = 1;
     } else if (strcmp(argv[i], "--rotate-x") == 0) {
       rotate_x = 1;
       rotate_y = 0;
+      rotation_given = 1;
     } else if (strcmp(argv[i], "--rotate-y") == 0) {
       rotate_x = 0;
       rotate_y = 1;
+      rotation_given = 1;
     } else if (strcmp(argv[i], "--speed") == 0 || strcmp(argv[i], "-s") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -114,10 +138,13 @@ int main(int argc, char **argv) {
       const char *option = argv[i];
       if (!nx_parse_number(option, argv[++i], -1000.0f, 1000.0f, &speed))
         return 1;
+      speed_given = 1;
     } else if (strcmp(argv[i], "--no-info") == 0) {
       show_info = 0;
+      info_given = 1;
     } else if (strcmp(argv[i], "--no-color") == 0) {
       use_color = 0;
+      color_given = 1;
     } else if (strcmp(argv[i], "--frames") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -126,12 +153,14 @@ int main(int argc, char **argv) {
       const char *option = argv[i];
       if (!nx_parse_integer(option, argv[++i], 0, 0x7fffffff, &max_frames))
         return 1;
+      frames_given = 1;
     } else if (strcmp(argv[i], "--shading-chars") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
         return 1;
       }
       shading = argv[++i];
+      shading_given = 1;
     } else if (strcmp(argv[i], "--height") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -140,6 +169,7 @@ int main(int argc, char **argv) {
       const char *option = argv[i];
       if (!nx_parse_integer(option, argv[++i], 1, NEXUS_MAX_HEIGHT, &g_opts.height))
         return 1;
+      height_given = 1;
     } else if (strcmp(argv[i], "--size") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -148,6 +178,7 @@ int main(int argc, char **argv) {
       const char *option = argv[i];
       if (!nx_parse_number(option, argv[++i], 0.5f, 5.0f, &g_opts.size))
         return 1;
+      size_given = 1;
     } else if (strcmp(argv[i], "--depth") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -157,6 +188,7 @@ int main(int argc, char **argv) {
       if (!nx_parse_number(option, argv[++i], 0.1f, 10.0f, &g_opts.depth))
         return 1;
       g_opts.depth_user_set = 1;
+      depth_given = 1;
     } else {
       fprintf(stderr, "nexus: unknown option: %s\nTry 'nexus --help'\n",
               argv[i]);
@@ -164,14 +196,60 @@ int main(int argc, char **argv) {
     }
   }
 
-  /* The config file fills in anything not given on the command line. A value
-   * of "default" means the built-in ramp. */
+  /* ---------------------------------------------------------- config file */
+  /* Values from ~/.config/nexus/nexus.conf fill in whatever the command line
+   * did not set; flags always win. */
   config_ensure();
-  if (!shading) {
-    const char *cfg = config_get("shading_chars");
-    if (cfg && cfg[0] && strcasecmp(cfg, "default") != 0)
-      shading = cfg;
+  char cfg[256];
+  char cfg_logo[512];
+  char cfg_shading[256];
+
+  if (!logo_given && config_get("logo", cfg_logo, sizeof(cfg_logo)) && cfg_logo[0])
+    logo_path = cfg_logo;
+
+  if (!shading_given && config_get("shading_chars", cfg_shading, sizeof(cfg_shading)) &&
+      cfg_shading[0] && strcasecmp(cfg_shading, "default") != 0)
+    shading = cfg_shading;
+
+  if (!rotation_given && config_get("rotation", cfg, sizeof(cfg)) && cfg[0]) {
+    if (strcasecmp(cfg, "x") == 0) {
+      rotate_x = 1;
+      rotate_y = 0;
+    } else if (strcasecmp(cfg, "y") == 0) {
+      rotate_x = 0;
+      rotate_y = 1;
+    } else if (strcasecmp(cfg, "both") == 0) {
+      rotate_x = 1;
+      rotate_y = 1;
+    } else {
+      fprintf(stderr, "nexus: rotation must be x, y or both (got '%s')\n", cfg);
+    }
   }
+
+  if (!speed_given && config_get("speed", cfg, sizeof(cfg)) && cfg[0])
+    nx_parse_number("speed", cfg, -1000.0f, 1000.0f, &speed);
+  if (!size_given && config_get("size", cfg, sizeof(cfg)) && cfg[0])
+    nx_parse_number("size", cfg, 0.5f, 5.0f, &g_opts.size);
+  if (!depth_given && config_get("depth", cfg, sizeof(cfg)) && cfg[0]) {
+    float d;
+    if (nx_parse_number("depth", cfg, 0.1f, 10.0f, &d)) {
+      g_opts.depth = d;
+      /* A value equal to the built-in default leaves the automatic depth
+       * boost for flat logos enabled, so the shipped template behaves the
+       * same as having no config at all; anything else is an explicit
+       * choice and disables the boost. */
+      if (d < 0.999f || d > 1.001f)
+        g_opts.depth_user_set = 1;
+    }
+  }
+  if (!height_given && config_get("height", cfg, sizeof(cfg)) && cfg[0])
+    nx_parse_integer("height", cfg, 0, NEXUS_MAX_HEIGHT, &g_opts.height);
+  if (!frames_given && config_get("frames", cfg, sizeof(cfg)) && cfg[0])
+    nx_parse_integer("frames", cfg, 0, 0x7fffffff, &max_frames);
+  if (!info_given && config_get("info", cfg, sizeof(cfg)) && cfg[0])
+    show_info = config_bool("info", cfg, show_info);
+  if (!color_given && config_get("color", cfg, sizeof(cfg)) && cfg[0])
+    use_color = config_bool("color", cfg, use_color);
 
   render_set_shading(shading);
 

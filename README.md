@@ -112,9 +112,25 @@ shading_chars = o
 
 On first run nexus writes `~/.config/nexus/nexus.conf` (honouring
 `XDG_CONFIG_HOME`) with a commented template. It is a list of `key = value`
-lines; blank lines and lines starting with `#` are ignored. The only key so far
-is `shading_chars`, whose value `default` restores the built-in ramp.
-Command-line flags win over the config file.
+lines; blank lines and lines starting with `#` are ignored. Every command-line
+option has a matching key, and **flags always win over the file**:
+
+| Key             | Values                          | Equivalent flag       |
+| --------------- | ------------------------------- | --------------------- |
+| `logo`          | file path or distro/logo name   | `--logo`              |
+| `shading_chars` | any ramp; `default` for built-in| `--shading-chars`     |
+| `rotation`      | `x`, `y` or `both`              | `--rotate-x`/`--rotate-y` |
+| `speed`         | number, e.g. `1.0`              | `--speed`             |
+| `size`          | number, e.g. `1.0`              | `--size`              |
+| `depth`         | number, e.g. `1.0`              | `--depth`             |
+| `height`        | rows; `0` = auto                | `--height`            |
+| `frames`        | count; `0` = until a keypress   | `--frames`            |
+| `info`          | `true`/`false`                  | `--no-info` (inverse) |
+| `color`         | `true`/`false`                  | `--no-color` (inverse)|
+
+Booleans also accept `yes`/`no`, `on`/`off` and `1`/`0`. A `default` value (or
+a value equal to the built-in default) leaves the built-in behaviour in place.
+An unknown value prints a warning and keeps the built-in default.
 
 ## Info fields
 

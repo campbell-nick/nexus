@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define NEXUS_VERSION "1.1.0"
-#define NEXUS_CODENAME "Zenith"
+#define NEXUS_VERSION "1.2.0"
+#define NEXUS_CODENAME "Facet"
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
@@ -82,9 +82,9 @@ void info_gather_all(void);
 /* -------------------------------------------------------------- config.c */
 /* Create ~/.config/nexus/nexus.conf with a template if it does not exist. */
 void config_ensure(void);
-/* Look up a key in the config file. Returns a pointer to a static buffer, or
- * NULL when the file or the key is missing. */
-const char *config_get(const char *key);
+/* Look up a key in the config file, copying its value into out. Returns 1 when
+ * the key is present, 0 when the file or the key is missing. */
+int config_get(const char *key, char *out, size_t outlen);
 
 /* -------------------------------------------------------------- render.c */
 void render_set_shading(const char *chars);

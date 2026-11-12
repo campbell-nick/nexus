@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-12
+
+### Added
+
+- `nexus.conf` now mirrors every command-line option, not just `shading_chars`:
+  `logo`, `rotation`, `speed`, `size`, `depth`, `height`, `frames`, `info` and
+  `color`. Boolean values accept `true`/`false`, `yes`/`no`, `on`/`off` and
+  `1`/`0`. Command-line flags still take precedence, and an unknown value warns
+  and keeps the built-in default.
+
+### Changed
+
+- `config_get` writes into a caller-supplied buffer instead of returning a
+  shared static one, so several keys can be read safely in a row.
+- A config value equal to the built-in default no longer disables the
+  automatic depth-boost for flat logos, so the shipped template renders the
+  same as having no config at all.
+
 ## [1.1.0] - 2026-11-11
 
 ### Added
@@ -37,6 +55,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and Tux fallbacks. `--logo <name|path>` selects one explicitly.
 - Package counts for emerge, pacman, dpkg, rpm, xbps, apk, eopkg and nix.
 
-[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/campbell-nick/nexus/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/campbell-nick/nexus/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/campbell-nick/nexus/releases/tag/v1.0.0

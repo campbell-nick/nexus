@@ -17,10 +17,37 @@
 static const char CONFIG_TEMPLATE[] =
     "# nexus configuration\n"
     "#\n"
-    "# Shading ramp used to draw the logo, from darkest to brightest; each\n"
-    "# character (or UTF-8 glyph) is one step. Use \"default\" for the\n"
-    "# built-in ramp (.,-~:;=!*#$@).\n"
-    "shading_chars = default\n";
+    "# One \"key = value\" per line; blank lines and lines starting with '#' are\n"
+    "# ignored. Command-line flags always win over this file.\n"
+    "\n"
+    "# Logo: a file path, or a distro/logo name such as \"arch\". Empty = auto.\n"
+    "logo =\n"
+    "\n"
+    "# Shading ramp, darkest to brightest. \"default\" is the built-in ramp\n"
+    "# (.,-~:;=!*#$@).\n"
+    "shading_chars = default\n"
+    "\n"
+    "# Rotation axis: x, y or both.\n"
+    "rotation = both\n"
+    "\n"
+    "# Animation speed multiplier.\n"
+    "speed = 1.0\n"
+    "\n"
+    "# Logo scale and 3D depth.\n"
+    "size = 1.0\n"
+    "depth = 1.0\n"
+    "\n"
+    "# Render height in rows; 0 = auto.\n"
+    "height = 0\n"
+    "\n"
+    "# Stop after this many frames; 0 = run until a key is pressed.\n"
+    "frames = 0\n"
+    "\n"
+    "# Show the system information beside the logo.\n"
+    "info = true\n"
+    "\n"
+    "# Colour the logo.\n"
+    "color = true\n";
 
 /* Build the config file path. Returns 0 when no home directory is known. */
 static int config_path(char *buf, size_t n) {
@@ -81,18 +108,17 @@ void config_ensure(void) {
   fclose(fp);
 }
 
-const char *config_get(const char *key) {
-  static char value[512];
+int config_get(const char *key, char *out, size_t outlen) {
   char path[512];
   if (!config_path(path, sizeof(path)))
-    return NULL;
+    return 0;
 
   FILE *fp = fopen(path, "r");
   if (!fp)
-    return NULL;
+    return 0;
 
   char line[512];
-  const char *found = NULL;
+  int found = 0;
   while (fgets(line, sizeof(line), fp)) {
     char *p = trim(line);
     if (*p == '\0' || *p == '#')
@@ -110,8 +136,8 @@ const char *config_get(const char *key) {
       v[vlen - 1] = '\0';
       v++;
     }
-    snprintf(value, sizeof(value), "%s", v);
-    found = value;
+    snprintf(out, outlen, "%s", v);
+    found = 1;
     break;
   }
   fclose(fp);
