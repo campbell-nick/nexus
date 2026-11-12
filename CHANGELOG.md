@@ -6,10 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-12
+
 ### Added
 
 - A `flake.nix`, so Nix users can `nix build`, `nix run`, `nix develop`, and
   build the static musl variant with `nix build .#musl`.
+- `--no-spin` (and the `spin = true|false` config key) to draw the plain 2D
+  logo instead of the spinning 3D relief.
 
 ## [1.4.0] - 2026-11-12
 
@@ -83,7 +87,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and Tux fallbacks. `--logo <name|path>` selects one explicitly.
 - Package counts for emerge, pacman, dpkg, rpm, xbps, apk, eopkg and nix.
 
-[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/campbell-nick/nexus/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/campbell-nick/nexus/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/campbell-nick/nexus/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/campbell-nick/nexus/compare/v1.1.0...v1.2.0

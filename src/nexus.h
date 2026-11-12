@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define NEXUS_VERSION "1.4.0"
-#define NEXUS_CODENAME "Nomad"
+#define NEXUS_VERSION "1.5.0"
+#define NEXUS_CODENAME "Anchor"
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
@@ -92,6 +92,6 @@ int config_get(const char *key, char *out, size_t outlen);
 /* -------------------------------------------------------------- render.c */
 void render_set_shading(const char *chars);
 void render_run(int show_info, int use_color, int max_frames, int rotate_x,
-                int rotate_y, float speed);
+                int rotate_y, float speed, int spin);
 
 #endif /* NEXUS_H */

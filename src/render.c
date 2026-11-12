@@ -452,9 +452,148 @@ static void render_build_points(void) {
   free(gnz);
 }
 
+/* --------------------------------------------------------- plain (2D) view */
+/* Emit one logo row as flat glyphs, switching colour only when it changes.
+ * ANSI logos keep their own colours; plain logos get the distro tint. */
+static char *emit_logo_row(char *p, char *end, int row, int use_color) {
+  int n = logo_cell_counts[row];
+  if (!use_color) {
+    for (int c = 0; c < n && p + 4 < end; c++) {
+      const char *g = logo_cells[row][c];
+      int k = 0;
+      while (k < 4 && g[k]) {
+        p[k] = g[k];
+        k++;
+      }
+      p += k ? k : 1;
+    }
+    return p;
+  }
+
+  static char tbl[128][8];
+  static int tlen[128];
+  const int inner_len = (int)strlen(g_color_inner);
+  int prev = -1;
+  for (int c = 0; c < n && p + 16 < end; c++) {
+    const char *g = logo_cells[row][c];
+    int col = logo_cell_color[row][c];
+    const char *seq;
+    int slen, key;
+    if (logo_has_ansi && col > 0 && col < 128) {
+      if (!tlen[col])
+        tlen[col] = snprintf(tbl[col], sizeof(tbl[col]), "\033[1;%dm", col);
+      seq = tbl[col];
+      slen = tlen[col];
+      key = col;
+    } else {
+      seq = g_color_inner;
+      slen = inner_len;
+      key = 128; /* sentinel: the distro tint */
+    }
+    if (key != prev) {
+      memcpy(p, seq, slen);
+      p += slen;
+      prev = key;
+    }
+    int k = 0;
+    while (k < 4 && g[k]) {
+      p[k] = g[k];
+      k++;
+    }
+    p += k ? k : 1;
+  }
+  return p;
+}
+
+/* --no-spin: draw the logo exactly as the source art, one pass, then return to
+ * the shell. The info block sits beside the logo when it fits and is stacked
+ * below it otherwise. */
+static void render_run_2d(int show_info, int use_color) {
+  get_term_size(&term_rows, &term_cols);
+
+  const int gap = NEXUS_GAP;
+  const int fetch_start = show_info ? 1 : 0; /* info starts on the second row */
+
+  int info_cols = 0;
+  if (show_info)
+    for (int i = 0; i < info_line_count; i++) {
+      int w = nx_visible_width(info_lines[i]);
+      if (w > info_cols)
+        info_cols = w;
+    }
+
+  int stacked = 0;
+  if (show_info && term_cols > 0 && logo_cols + gap + info_cols > term_cols)
+    stacked = 1;
+
+  int lines;
+  if (!show_info)
+    lines = logo_rows;
+  else if (stacked)
+    lines = logo_rows + (info_line_count ? info_line_count + 1 : 0);
+  else {
+    lines = logo_rows;
+    if (fetch_start + info_line_count > lines)
+      lines = fetch_start + info_line_count;
+  }
+
+  size_t cap = (size_t)(lines + 2) *
+                   ((size_t)logo_cols * 16 + NEXUS_MAX_LINE_LEN + 64) +
+               64;
+  char *buf = malloc(cap);
+  if (!buf)
+    return;
+  char *p = buf;
+  char *end = buf + cap - 8;
+
+  const char reset_seq[] = "\033[0m";
+  const int clip = term_cols > 0 ? term_cols : -1;
+
+  for (int i = 0; i < lines; i++) {
+    int has_logo = i < logo_rows;
+    if (has_logo)
+      p = emit_logo_row(p, end, i, use_color);
+
+    if (show_info && !stacked) {
+      int pad = logo_cols - (has_logo ? logo_cell_counts[i] : 0);
+      while (pad-- > 0 && p + 4 < end)
+        *p++ = ' ';
+      if (p + gap + 4 < end) {
+        memset(p, ' ', gap);
+        p += gap;
+      }
+      int fi = i - fetch_start;
+      if (fi >= 0 && fi < info_line_count)
+        p = nx_emit_clipped(p, end, info_lines[fi], clip);
+    } else if (stacked && !has_logo) {
+      int fi = i - logo_rows - 1; /* first row below the logo is blank */
+      if (fi >= 0 && fi < info_line_count)
+        p = nx_emit_clipped(p, end, info_lines[fi], clip);
+    }
+
+    if (use_color && p + 4 < end) {
+      memcpy(p, reset_seq, 4);
+      p += 4;
+    }
+    if (p + 1 < end)
+      *p++ = '\n';
+  }
+
+  if (write(STDOUT_FILENO, buf, (size_t)(p - buf)) < 0) {
+    free(buf);
+    return;
+  }
+  free(buf);
+}
+
 /* --------------------------------------------------------------- the loop */
 void render_run(int show_info, int use_color, int max_frames, int rotate_x,
-                int rotate_y, float speed) {
+                int rotate_y, float speed, int spin) {
+  if (!spin) {
+    render_run_2d(show_info, use_color);
+    return;
+  }
+
   get_term_size(&term_rows, &term_cols);
 
   render_apply_layout(show_info);

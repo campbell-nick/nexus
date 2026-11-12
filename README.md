@@ -77,6 +77,8 @@ nix build .#musl     # same source linked against musl, statically (Linux)
 | `--height <n>` | Override the render height in rows |
 | `--no-info` | Just the logo, no system info |
 | `--no-color` | Disable logo coloring |
+| `--no-palette` | Hide the 16-colour terminal palette |
+| `--no-spin` | Draw the plain 2D logo instead of the spinning 3D one |
 | `--frames <n>` | Stop after `n` frames (default: run until a keypress) |
 | `--shading-chars <str>` | Custom shading ramp (UTF-8 aware) |
 | `-h`, `--help` | Show help |
@@ -128,6 +130,10 @@ borrowed from fastfetch keep their own ANSI colours; plain logos (files or the
 embedded set) are tinted with the distribution's canonical colour. Unknown
 distributions keep the default magenta/white scheme.
 
+By default the logo is lifted into a height map and rendered as a spinning 3D
+relief. Pass `--no-spin` (or set `spin = false`) to draw it flat instead,
+exactly as the source art, and exit.
+
 ## Shading
 
 Brightness is mapped onto a ramp, one character per cell. The built-in ramp is
@@ -163,6 +169,7 @@ option has a matching key, and **flags always win over the file**:
 | `info`          | `true`/`false`                  | `--no-info` (inverse) |
 | `color`         | `true`/`false`                  | `--no-color` (inverse)|
 | `palette`       | `true`/`false`                  | `--no-palette` (inverse)|
+| `spin`          | `true`/`false`                  | `--no-spin` (inverse) |
 
 Booleans also accept `yes`/`no`, `on`/`off` and `1`/`0`. A `default` value (or
 a value equal to the built-in default) leaves the built-in behaviour in place.

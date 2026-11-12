@@ -58,6 +58,7 @@ static void print_help(void) {
       "  --no-info                 Just the logo, no system info\n"
       "  --no-color                Disable logo coloring\n"
       "  --no-palette              Hide the terminal colour palette\n"
+      "  --no-spin                 Draw the plain 2D logo instead of the 3D spin\n"
       "  --frames <n>              Stop after n frames (default: run until a key)\n"
       "  --shading-chars <str>     Custom shading ramp, supports UTF-8\n"
       "                            (default: .,-~:;=!*#$@)\n"
@@ -68,7 +69,7 @@ static void print_help(void) {
       "  per line. It mirrors every flag above:\n"
       "    logo, shading_chars, rotation (x|y|both), speed, size, depth,\n"
       "    height, frames, info (true|false), color (true|false),\n"
-      "    palette (true|false)\n"
+      "    palette (true|false), spin (true|false)\n"
       "  'default' restores a built-in value; command-line flags always win.\n\n"
       "Logo:\n"
       "  --logo <name> shows a distro logo, e.g. '--logo arch'\n"
@@ -97,6 +98,7 @@ int main(int argc, char **argv) {
   int show_info = 1;
   int use_color = 1;
   int show_palette = 1;
+  int spin = 1;
   int max_frames = 0;
   const char *shading = NULL;
 
@@ -104,7 +106,7 @@ int main(int argc, char **argv) {
    * the rest, so flags always win. */
   int logo_given = 0, rotation_given = 0, speed_given = 0, size_given = 0,
       depth_given = 0, height_given = 0, frames_given = 0, info_given = 0,
-      color_given = 0, shading_given = 0, palette_given = 0;
+      color_given = 0, shading_given = 0, palette_given = 0, spin_given = 0;
 
   g_opts.height = 0; /* 0 = auto (fit the info block) */
   g_opts.size = 1.0f;
@@ -151,6 +153,9 @@ int main(int argc, char **argv) {
     } else if (strcmp(argv[i], "--no-palette") == 0) {
       show_palette = 0;
       palette_given = 1;
+    } else if (strcmp(argv[i], "--no-spin") == 0) {
+      spin = 0;
+      spin_given = 1;
     } else if (strcmp(argv[i], "--frames") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -258,6 +263,8 @@ int main(int argc, char **argv) {
     use_color = config_bool("color", cfg, use_color);
   if (!palette_given && config_get("palette", cfg, sizeof(cfg)) && cfg[0])
     show_palette = config_bool("palette", cfg, show_palette);
+  if (!spin_given && config_get("spin", cfg, sizeof(cfg)) && cfg[0])
+    spin = config_bool("spin", cfg, spin);
 
   render_set_shading(shading);
 
@@ -327,6 +334,6 @@ int main(int argc, char **argv) {
       info_add_palette();
   }
 
-  render_run(show_info, use_color, max_frames, rotate_x, rotate_y, speed);
+  render_run(show_info, use_color, max_frames, rotate_x, rotate_y, speed, spin);
   return 0;
 }
