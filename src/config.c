@@ -64,7 +64,7 @@ static const char CONFIG_TEMPLATE[] =
     "# --- Info block ---------------------------------------------------------\n"
     "#\n"
     "# Which fields to show and in what order. Names: title, os, host, kernel,\n"
-    "# uptime, age, packages, shell, cpu, gpu, memory, swap, disk, custom,\n"
+    "# uptime, age, packages, nix, shell, cpu, gpu, memory, swap, disk, custom,\n"
     "# palette. Use \"all\" for the built-in order. Empty = built-in order.\n"
     "# fields = os, kernel, cpu, memory, custom, palette\n"
     "fields =\n"

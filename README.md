@@ -211,6 +211,23 @@ birth time; it is omitted when the filesystem does not report one. Package
 counts come from emerge, pacman, dpkg, rpm, xbps, apk, eopkg or nix, whichever
 is present.
 
+`nix` is a separate, opt-in field that counts Nix packages per profile the way
+fastfetch does: it walks each profile's store closure and keeps the paths that
+look like real packages (a version, not a `-dev`/`-bin`/`-doc`/`-man`/`-info`
+output, and not the system derivation). Counts are labelled `nix-system`,
+`nix-user` and `nix-default`, and profiles that are absent are left out:
+
+```
+Nix: 5 (nix-user), 61 (nix-default)
+```
+
+Because it is not in the default order, plain `nexus` is unchanged and there is
+no duplication on NixOS unless you ask for it. Add it below `packages` with:
+
+```
+./nexus --fields "os, packages, nix, shell, cpu, memory"
+```
+
 Choose and order the fields with `--fields` (or `fields =`):
 
 ```

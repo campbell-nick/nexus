@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-12
+
+### Added
+
+- A `nix` info field that counts Nix packages per profile the way fastfetch
+  does: it walks each profile's store closure and keeps the paths that look
+  like real packages. It reports `nix-system`, `nix-user` and `nix-default`
+  counts (absent profiles are omitted), e.g. `Nix: 5 (nix-user), 61
+  (nix-default)`. The probe finds `nix-store` even when the caller's `PATH`
+  lacks Nix, and only runs when the field is shown or a `custom` line uses
+  `{nix}`, so it costs nothing otherwise. `nix` is opt-in and not part of the
+  default order, so the default output is unchanged (and there is no NixOS
+  duplication unless you ask for it).
+
 ## [1.6.0] - 2026-11-12
 
 ### Added

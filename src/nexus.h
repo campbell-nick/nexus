@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define NEXUS_VERSION "1.6.0"
-#define NEXUS_CODENAME "Prism"
+#define NEXUS_VERSION "1.7.0"
+#define NEXUS_CODENAME "Closure"
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
@@ -90,9 +90,9 @@ void info_set_title(const char *format);
 void info_set_custom(const char *const *lines, int count);
 /* Gather every field, then lay the info block out in the requested order.
  * `fields` is a comma/space list of field names (title, os, host, kernel,
- * uptime, age, packages, shell, cpu, gpu, memory, swap, disk, custom, palette);
- * NULL or "" uses the built-in order. `show_palette` appends the colour
- * palette unless it was placed explicitly. */
+ * uptime, age, packages, nix, shell, cpu, gpu, memory, swap, disk, custom,
+ * palette); NULL or "" uses the built-in order. `show_palette` appends the
+ * colour palette unless it was placed explicitly. */
 void info_gather_all(const char *fields, int show_palette);
 
 /* -------------------------------------------------------------- config.c */

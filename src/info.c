@@ -495,6 +495,116 @@ static void gather_packages(void) {
     info_emit("packages", "Packages", "%s", val);
 }
 
+/* ------------------------------------------------------------------ nix */
+/* Count Nix packages per profile the way fastfetch does: run
+ * `nix-store --query --requisites` and keep the store paths that look like
+ * real packages - a directory whose name carries a version (1.2) and is not a
+ * doc/man/info/dev/bin output or the system derivation. Profiles that are not
+ * present cost only a stat(). */
+static int nix_is_package(const char *name) {
+  if (strncmp(name, "nixos-system-nixos-", 19) == 0)
+    return 0;
+  static const char *skip[] = {"-doc", "-man", "-info", "-dev", "-bin", NULL};
+  size_t len = strlen(name);
+  for (int i = 0; skip[i]; i++) {
+    size_t sl = strlen(skip[i]);
+    if (len > sl && strcmp(name + len - sl, skip[i]) == 0)
+      return 0;
+  }
+  int state = 0; /* 0 start, 1 digits, 2 dot, 3 version seen */
+  for (const char *p = name; *p; p++) {
+    if (state == 0) {
+      if (*p >= '0' && *p <= '9')
+        state = 1;
+    } else if (state == 1) {
+      if (*p >= '0' && *p <= '9')
+        continue;
+      state = (*p == '.') ? 2 : 0;
+    } else if (state == 2) {
+      state = (*p >= '0' && *p <= '9') ? 3 : 0;
+    }
+  }
+  return state == 3;
+}
+
+static int nix_count_profile(const char *path) {
+  struct stat st;
+  if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))
+    return 0;
+
+  /* Find nix-store even when the caller's PATH lacks Nix (e.g. a login shell
+   * or a launcher): prepend the usual profile bin directories. */
+  char cmd[640];
+  snprintf(cmd, sizeof(cmd),
+           "PATH=\"/nix/var/nix/profiles/default/bin:${HOME:-}/.nix-profile/bin"
+           ":$PATH\" timeout 2 nix-store --query --requisites '%s' 2>/dev/null",
+           path);
+  FILE *fp = popen(cmd, "r");
+  if (!fp)
+    return 0;
+
+  int count = 0;
+  char line[NEXUS_MAX_LINE_LEN];
+  while (fgets(line, sizeof(line), fp)) {
+    size_t len = strlen(line);
+    while (len && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+      line[--len] = '\0';
+    if (!len)
+      continue;
+    const char *base = strrchr(line, '/');
+    base = base ? base + 1 : line;
+    struct stat ps;
+    if (stat(line, &ps) == 0 && S_ISDIR(ps.st_mode) && nix_is_package(base))
+      count++;
+  }
+  pclose(fp);
+  return count;
+}
+
+static void gather_nix(void) {
+  int sys_count = nix_count_profile("/run/current-system");
+  int def_count = nix_count_profile("/nix/var/nix/profiles/default");
+
+  int user_count = 0;
+  const char *home = getenv("HOME");
+  if (home && home[0]) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/.nix-profile", home);
+    user_count += nix_count_profile(path);
+
+    const char *state = getenv("XDG_STATE_HOME");
+    if (state && state[0])
+      snprintf(path, sizeof(path), "%s/nix/profile", state);
+    else
+      snprintf(path, sizeof(path), "%s/.local/state/nix/profile", home);
+    user_count += nix_count_profile(path);
+  }
+  const char *user = getenv("USER");
+  if (user && user[0]) {
+    char path[512];
+    snprintf(path, sizeof(path), "/etc/profiles/per-user/%s", user);
+    user_count += nix_count_profile(path);
+  }
+
+  if (sys_count == 0 && user_count == 0 && def_count == 0)
+    return;
+
+  char val[256];
+  int pos = 0;
+  val[0] = '\0';
+  if (sys_count > 0)
+    pos += snprintf(val + pos, sizeof(val) - (size_t)pos, "%d (nix-system)",
+                    sys_count);
+  if (user_count > 0)
+    pos += snprintf(val + pos, sizeof(val) - (size_t)pos, "%s%d (nix-user)",
+                    pos ? ", " : "", user_count);
+  if (def_count > 0)
+    pos += snprintf(val + pos, sizeof(val) - (size_t)pos, "%s%d (nix-default)",
+                    pos ? ", " : "", def_count);
+
+  info_emit("nix", "Nix", "%s", val);
+}
+
 static int looks_like_shell(const char *s) {
   static const char *shells[] = {"bash", "zsh",  "fish",   "dash", "sh",
                                  "nu",   "elvish", "tcsh", "csh",  "xonsh",
@@ -887,9 +997,10 @@ static void emit_palette(void) {
 /* -------------------------------------------------------------- dispatch */
 static int is_known_field(const char *name) {
   static const char *known[] = {"title",  "os",     "host",  "kernel",
-                                "uptime", "age",    "packages", "shell",
-                                "cpu",    "gpu",    "memory", "swap",
-                                "disk",   "custom", "palette", "all", NULL};
+                                "uptime", "age",    "packages", "nix",
+                                "shell",  "cpu",    "gpu",    "memory",
+                                "swap",   "disk",   "custom", "palette",
+                                "all",    NULL};
   for (int i = 0; known[i]; i++)
     if (strcmp(name, known[i]) == 0)
       return 1;
@@ -914,6 +1025,25 @@ static void emit_custom(void) {
   }
 }
 
+/* The Nix probe shells out (twice), so only run it when it is actually used:
+ * either `nix` is one of the requested fields or a custom line references
+ * {nix}. Everything else is cheap enough to gather unconditionally. */
+static int nix_requested(const char *fields) {
+  if (fields && fields[0]) {
+    char work[512];
+    snprintf(work, sizeof(work), "%s", fields);
+    char *save = NULL;
+    for (char *t = strtok_r(work, ", \t", &save); t;
+         t = strtok_r(NULL, ", \t", &save))
+      if (strcmp(t, "nix") == 0)
+        return 1;
+  }
+  for (int i = 0; i < custom_count; i++)
+    if (strstr(custom_store[i], "{nix}"))
+      return 1;
+  return 0;
+}
+
 void info_gather_all(const char *fields, int show_palette) {
   entry_count = 0;
   gather_title();
@@ -923,6 +1053,8 @@ void info_gather_all(const char *fields, int show_palette) {
   gather_uptime();
   gather_age();
   gather_packages();
+  if (nix_requested(fields))
+    gather_nix();
   gather_shell();
   gather_cpu();
   gather_gpu();
