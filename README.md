@@ -82,7 +82,6 @@ nix build .#musl     # same source linked against musl, statically (Linux)
 | `--frames <n>` | Stop after `n` frames (default: run until a keypress) |
 | `--shading-chars <str>` | Custom shading ramp (UTF-8 aware) |
 | `--fields <list>` | Info fields to show, in order; `all` for the default order |
-| `--custom <text>` | Add a line to the info block; repeatable, `{field}` expands |
 | `--title <format>` | Title line; `{user}`/`{hostname}`; `none` hides it |
 | `--separator <glyph>` | Label/value separator; `none` for a space |
 | `--key-color <sgr>` | SGR for labels (default `1;35`); `none` for no colour |
@@ -182,7 +181,7 @@ option has a matching key, and **flags always win over the file**:
 | `palette`       | `true`/`false`                  | `--no-palette` (inverse)|
 | `spin`          | `true`/`false`                  | `--no-spin` (inverse) |
 | `fields`        | comma/space list of field names | `--fields`            |
-| `custom`        | text; repeatable, `{field}` expands | `--custom`        |
+| `custom`        | text; repeatable, `{field}` expands | —                 |
 | `title`         | format with `{user}`/`{hostname}`, or `none` | `--title` |
 | `separator`     | glyph, or `none`                | `--separator`         |
 | `key_color`     | SGR parameters, e.g. `1;35`     | `--key-color`         |
@@ -234,11 +233,14 @@ Choose and order the fields with `--fields` (or `fields =`):
 ./nexus --fields "os, kernel, cpu, memory, custom, palette"
 ```
 
-Custom lines are added with `--custom` (or repeated `custom =` lines). They may
-reference any field, plus `{user}` and `{hostname}`:
+Custom lines are added with repeated `custom =` lines in the config file (there
+is no command-line flag for them). Each may reference any field, plus `{user}`
+and `{hostname}`:
 
 ```
-./nexus --custom "Welcome back, {user}!" --custom "uptime: {uptime}"
+# ~/.config/nexus/nexus.conf
+custom = Welcome back, {user}!
+custom = uptime: {uptime}
 ```
 
 The title, separator and colours are configurable too:

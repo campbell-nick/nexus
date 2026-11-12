@@ -46,50 +46,30 @@ static int config_bool(const char *key, const char *text, int fallback) {
 static void print_help(void) {
   printf(
       "Usage: nexus [options]\n\n"
-      "Options:\n"
-      "  -l, --logo <name|path>    Load a logo: a file path, or a distro/\n"
-      "                            logo name such as 'arch' or 'ubuntu'\n"
-      "  --logo-side <left|right>  Which side the logo sits on (default left)\n"
-      "  --rotate-x                Lock rotation to the X axis only\n"
-      "  --rotate-y                Lock rotation to the Y axis only\n"
-      "  -s, --speed <float>       Speed multiplier (default 1.0)\n"
-      "  --size <float>            Scale the logo (e.g. 2.0 for double size)\n"
-      "  --depth <float>           Scale the 3D depth (default 1.0)\n"
-      "  --height <n>              Override render height in rows\n"
-      "  --no-info                 Just the logo, no system info\n"
-      "  --no-color                Disable logo coloring\n"
-      "  --no-palette              Hide the terminal colour palette\n"
-      "  --no-spin                 Draw the plain 2D logo instead of the 3D spin\n"
-      "  --frames <n>              Stop after n frames (default: run until a key)\n"
-      "  --shading-chars <str>     Custom shading ramp, supports UTF-8\n"
-      "                            (default: .,-~:;=!*#$@)\n"
-      "  --fields <list>           Info fields to show, in order (comma/space\n"
-      "                            separated). Use 'all' for the default order\n"
-      "  --custom <text>           Add a line to the info block; repeatable.\n"
-      "                            {field} is replaced (e.g. {os}, {kernel})\n"
+      "  -l, --logo <name|path>    Logo name (e.g. arch) or logo file\n"
+      "  --logo-side <left|right>  Side the logo sits on (default left)\n"
+      "  --rotate-x | --rotate-y   Lock rotation to one axis\n"
+      "  -s, --speed <float>       Animation speed (default 1.0)\n"
+      "  --size <float>            Logo scale (default 1.0)\n"
+      "  --depth <float>           3D depth (default 1.0)\n"
+      "  --height <n>              Render height in rows (0 = auto)\n"
+      "  --frames <n>              Stop after n frames (0 = until a key)\n"
+      "  --no-spin                 Plain 2D logo instead of the 3D spin\n"
+      "  --no-info                 Logo only, no system info\n"
+      "  --no-color                Disable logo colour\n"
+      "  --no-palette              Hide the colour palette\n"
+      "  --shading-chars <str>     Shading ramp (default .,-~:;=!*#$@)\n"
+      "  --fields <list>           Info fields in order ('all' = default)\n"
       "  --title <format>          Title line; {user}/{hostname}; 'none' hides\n"
-      "  --separator <glyph>       Label/value separator; 'none' for a space\n"
-      "  --key-color <sgr>         SGR for labels (default 1;35); 'none' for none\n"
+      "  --separator <glyph>       Label/value separator ('none' = a space)\n"
+      "  --key-color <sgr>         SGR for labels (default 1;35)\n"
       "  --value-color <sgr>       SGR for values (default: terminal default)\n"
       "  --config <path>           Read this config file instead of the default\n"
       "  --profile <name>          Read ~/.config/nexus/<name>.conf\n"
       "  -V, --version             Show version\n"
       "  -h, --help                Show this help\n\n"
-      "Config:\n"
-      "  ~/.config/nexus/nexus.conf is created on first run; one 'key = value'\n"
-      "  per line. It mirrors every flag above:\n"
-      "    logo, logo_side (left|right), shading_chars, rotation (x|y|both),\n"
-      "    speed, size, depth, height, frames, info (true|false),\n"
-      "    color (true|false), palette (true|false), spin (true|false),\n"
-      "    fields, custom (repeatable), title, separator, key_color, value_color\n"
-      "  'default' restores a built-in value; command-line flags always win.\n\n"
-      "Logo:\n"
-      "  --logo <name> shows a distro logo, e.g. '--logo arch'\n"
-      "  (fastfetch's library when installed, else the embedded set).\n"
-      "  --logo <path> loads a logo file; an optional first line\n"
-      "  '# distro: <name>' sets the color scheme.\n"
-      "  Without --logo, ~/.config/nexus/logo.txt is used if present,\n"
-      "  otherwise the detected distro logo.\n");
+      "Config: ~/.config/nexus/nexus.conf (key = value, mirrors the flags\n"
+      "above; see the README for details).\n");
 }
 
 static void print_version(void) {
@@ -142,8 +122,6 @@ int main(int argc, char **argv) {
   const char *key_color = NULL;
   const char *value_color = NULL;
   const char *logo_side = NULL;
-  const char *custom_cli[NEXUS_MAX_CUSTOM];
-  int custom_cli_count = 0;
   int config_explicit = 0;
 
   /* Which options the command line set explicitly; the config file fills in
@@ -225,15 +203,6 @@ int main(int argc, char **argv) {
       }
       fields = argv[++i];
       fields_given = 1;
-    } else if (strcmp(argv[i], "--custom") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
-        return 1;
-      }
-      if (custom_cli_count < NEXUS_MAX_CUSTOM)
-        custom_cli[custom_cli_count++] = argv[++i];
-      else
-        i++; /* keep parsing; extra lines beyond the cap are ignored */
     } else if (strcmp(argv[i], "--title") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -405,19 +374,13 @@ int main(int argc, char **argv) {
       cfg_side[0] && strcasecmp(cfg_side, "default") != 0)
     logo_side = cfg_side;
 
-  /* Custom lines: command-line --custom wins; otherwise every `custom =` line
-   * in the config, in order. */
+  /* Custom lines come from every `custom =` line in the config, in order. */
   const char *custom_use[NEXUS_MAX_CUSTOM];
   int custom_use_count = 0;
-  if (custom_cli_count > 0) {
-    for (int i = 0; i < custom_cli_count; i++)
-      custom_use[custom_use_count++] = custom_cli[i];
-  } else {
-    int n = config_get_all("custom", cfg_custom, NEXUS_MAX_CUSTOM);
-    for (int i = 0; i < n; i++)
-      if (cfg_custom[i][0])
-        custom_use[custom_use_count++] = cfg_custom[i];
-  }
+  int n_custom = config_get_all("custom", cfg_custom, NEXUS_MAX_CUSTOM);
+  for (int i = 0; i < n_custom; i++)
+    if (cfg_custom[i][0])
+      custom_use[custom_use_count++] = cfg_custom[i];
 
   info_configure(separator, key_color, value_color);
   info_set_title(title);

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `--help` is now a compact, one-line-per-option listing.
+
+### Removed
+
+- The `--custom` command-line flag. Custom info lines are configured only with
+  repeated `custom =` lines in the config file.
+
 ## [1.7.0] - 2026-11-12
 
 ### Added
