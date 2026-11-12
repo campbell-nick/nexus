@@ -49,6 +49,7 @@ static void print_help(void) {
       "Options:\n"
       "  -l, --logo <name|path>    Load a logo: a file path, or a distro/\n"
       "                            logo name such as 'arch' or 'ubuntu'\n"
+      "  --logo-side <left|right>  Which side the logo sits on (default left)\n"
       "  --rotate-x                Lock rotation to the X axis only\n"
       "  --rotate-y                Lock rotation to the Y axis only\n"
       "  -s, --speed <float>       Speed multiplier (default 1.0)\n"
@@ -62,14 +63,25 @@ static void print_help(void) {
       "  --frames <n>              Stop after n frames (default: run until a key)\n"
       "  --shading-chars <str>     Custom shading ramp, supports UTF-8\n"
       "                            (default: .,-~:;=!*#$@)\n"
+      "  --fields <list>           Info fields to show, in order (comma/space\n"
+      "                            separated). Use 'all' for the default order\n"
+      "  --custom <text>           Add a line to the info block; repeatable.\n"
+      "                            {field} is replaced (e.g. {os}, {kernel})\n"
+      "  --title <format>          Title line; {user}/{hostname}; 'none' hides\n"
+      "  --separator <glyph>       Label/value separator; 'none' for a space\n"
+      "  --key-color <sgr>         SGR for labels (default 1;35); 'none' for none\n"
+      "  --value-color <sgr>       SGR for values (default: terminal default)\n"
+      "  --config <path>           Read this config file instead of the default\n"
+      "  --profile <name>          Read ~/.config/nexus/<name>.conf\n"
       "  -V, --version             Show version\n"
       "  -h, --help                Show this help\n\n"
       "Config:\n"
       "  ~/.config/nexus/nexus.conf is created on first run; one 'key = value'\n"
       "  per line. It mirrors every flag above:\n"
-      "    logo, shading_chars, rotation (x|y|both), speed, size, depth,\n"
-      "    height, frames, info (true|false), color (true|false),\n"
-      "    palette (true|false), spin (true|false)\n"
+      "    logo, logo_side (left|right), shading_chars, rotation (x|y|both),\n"
+      "    speed, size, depth, height, frames, info (true|false),\n"
+      "    color (true|false), palette (true|false), spin (true|false),\n"
+      "    fields, custom (repeatable), title, separator, key_color, value_color\n"
       "  'default' restores a built-in value; command-line flags always win.\n\n"
       "Logo:\n"
       "  --logo <name> shows a distro logo, e.g. '--logo arch'\n"
@@ -91,6 +103,29 @@ static void print_version(void) {
   printf("nexus %s \"%s\" (%s, %s)\n", NEXUS_VERSION, NEXUS_CODENAME, arch, os);
 }
 
+/* Resolve a --profile name to a config path. A name containing a slash is
+ * taken as a path; otherwise it lives beside the default nexus.conf. */
+static void config_use_profile(const char *name) {
+  if (strchr(name, '/')) {
+    config_set_path(name);
+    return;
+  }
+  char path[512];
+  const char *base = getenv("XDG_CONFIG_HOME");
+  if (base && base[0]) {
+    snprintf(path, sizeof(path), "%s/nexus/%s.conf", base, name);
+    config_set_path(path);
+    return;
+  }
+  const char *home = getenv("HOME");
+  if (!home || !home[0]) {
+    config_set_path(name);
+    return;
+  }
+  snprintf(path, sizeof(path), "%s/.config/nexus/%s.conf", home, name);
+  config_set_path(path);
+}
+
 int main(int argc, char **argv) {
   const char *logo_path = NULL;
   int rotate_x = 1, rotate_y = 1;
@@ -101,12 +136,23 @@ int main(int argc, char **argv) {
   int spin = 1;
   int max_frames = 0;
   const char *shading = NULL;
+  const char *fields = NULL;
+  const char *title = NULL;
+  const char *separator = NULL;
+  const char *key_color = NULL;
+  const char *value_color = NULL;
+  const char *logo_side = NULL;
+  const char *custom_cli[NEXUS_MAX_CUSTOM];
+  int custom_cli_count = 0;
+  int config_explicit = 0;
 
   /* Which options the command line set explicitly; the config file fills in
    * the rest, so flags always win. */
   int logo_given = 0, rotation_given = 0, speed_given = 0, size_given = 0,
       depth_given = 0, height_given = 0, frames_given = 0, info_given = 0,
-      color_given = 0, shading_given = 0, palette_given = 0, spin_given = 0;
+      color_given = 0, shading_given = 0, palette_given = 0, spin_given = 0,
+      fields_given = 0, title_given = 0, separator_given = 0,
+      key_color_given = 0, value_color_given = 0, logo_side_given = 0;
 
   g_opts.height = 0; /* 0 = auto (fit the info block) */
   g_opts.size = 1.0f;
@@ -172,6 +218,71 @@ int main(int argc, char **argv) {
       }
       shading = argv[++i];
       shading_given = 1;
+    } else if (strcmp(argv[i], "--fields") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      fields = argv[++i];
+      fields_given = 1;
+    } else if (strcmp(argv[i], "--custom") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      if (custom_cli_count < NEXUS_MAX_CUSTOM)
+        custom_cli[custom_cli_count++] = argv[++i];
+      else
+        i++; /* keep parsing; extra lines beyond the cap are ignored */
+    } else if (strcmp(argv[i], "--title") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      title = argv[++i];
+      title_given = 1;
+    } else if (strcmp(argv[i], "--separator") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      separator = argv[++i];
+      separator_given = 1;
+    } else if (strcmp(argv[i], "--key-color") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      key_color = argv[++i];
+      key_color_given = 1;
+    } else if (strcmp(argv[i], "--value-color") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      value_color = argv[++i];
+      value_color_given = 1;
+    } else if (strcmp(argv[i], "--logo-side") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      logo_side = argv[++i];
+      logo_side_given = 1;
+    } else if (strcmp(argv[i], "--config") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      config_set_path(argv[++i]);
+      config_explicit = 1;
+    } else if (strcmp(argv[i], "--profile") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      config_use_profile(argv[++i]);
+      config_explicit = 1;
     } else if (strcmp(argv[i], "--height") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -210,10 +321,18 @@ int main(int argc, char **argv) {
   /* ---------------------------------------------------------- config file */
   /* Values from ~/.config/nexus/nexus.conf fill in whatever the command line
    * did not set; flags always win. */
-  config_ensure();
+  if (!config_explicit)
+    config_ensure();
   char cfg[256];
   char cfg_logo[512];
   char cfg_shading[256];
+  char cfg_fields[512];
+  char cfg_title[NEXUS_MAX_LINE_LEN];
+  char cfg_sep[64];
+  char cfg_key[NEXUS_MAX_LINE_LEN];
+  char cfg_value[NEXUS_MAX_LINE_LEN];
+  char cfg_side[16];
+  char cfg_custom[NEXUS_MAX_CUSTOM][NEXUS_MAX_LINE_LEN];
 
   if (!logo_given && config_get("logo", cfg_logo, sizeof(cfg_logo)) && cfg_logo[0])
     logo_path = cfg_logo;
@@ -265,6 +384,56 @@ int main(int argc, char **argv) {
     show_palette = config_bool("palette", cfg, show_palette);
   if (!spin_given && config_get("spin", cfg, sizeof(cfg)) && cfg[0])
     spin = config_bool("spin", cfg, spin);
+
+  if (!fields_given && config_get("fields", cfg_fields, sizeof(cfg_fields)) &&
+      cfg_fields[0] && strcasecmp(cfg_fields, "default") != 0)
+    fields = cfg_fields;
+  if (!title_given && config_get("title", cfg_title, sizeof(cfg_title)) &&
+      cfg_title[0] && strcasecmp(cfg_title, "default") != 0)
+    title = cfg_title;
+  if (!separator_given && config_get("separator", cfg_sep, sizeof(cfg_sep)) &&
+      cfg_sep[0] && strcasecmp(cfg_sep, "default") != 0)
+    separator = cfg_sep;
+  if (!key_color_given && config_get("key_color", cfg_key, sizeof(cfg_key)) &&
+      cfg_key[0] && strcasecmp(cfg_key, "default") != 0)
+    key_color = cfg_key;
+  if (!value_color_given &&
+      config_get("value_color", cfg_value, sizeof(cfg_value)) &&
+      cfg_value[0] && strcasecmp(cfg_value, "default") != 0)
+    value_color = cfg_value;
+  if (!logo_side_given && config_get("logo_side", cfg_side, sizeof(cfg_side)) &&
+      cfg_side[0] && strcasecmp(cfg_side, "default") != 0)
+    logo_side = cfg_side;
+
+  /* Custom lines: command-line --custom wins; otherwise every `custom =` line
+   * in the config, in order. */
+  const char *custom_use[NEXUS_MAX_CUSTOM];
+  int custom_use_count = 0;
+  if (custom_cli_count > 0) {
+    for (int i = 0; i < custom_cli_count; i++)
+      custom_use[custom_use_count++] = custom_cli[i];
+  } else {
+    int n = config_get_all("custom", cfg_custom, NEXUS_MAX_CUSTOM);
+    for (int i = 0; i < n; i++)
+      if (cfg_custom[i][0])
+        custom_use[custom_use_count++] = cfg_custom[i];
+  }
+
+  info_configure(separator, key_color, value_color);
+  info_set_title(title);
+  info_set_custom(custom_use, custom_use_count);
+
+  int side_right = 0;
+  if (logo_side) {
+    if (strcasecmp(logo_side, "right") == 0)
+      side_right = 1;
+    else if (strcasecmp(logo_side, "left") == 0)
+      side_right = 0;
+    else
+      fprintf(stderr, "nexus: logo_side must be left or right (got '%s')\n",
+              logo_side);
+  }
+  render_set_logo_side(side_right);
 
   render_set_shading(shading);
 
@@ -328,10 +497,8 @@ int main(int argc, char **argv) {
 
   /* ------------------------------------------------------------- info */
   if (show_info) {
-    info_gather_all();
     /* The palette is drawn in colour, so it makes no sense with --no-color. */
-    if (show_palette && use_color)
-      info_add_palette();
+    info_gather_all(fields, show_palette && use_color);
   }
 
   render_run(show_info, use_color, max_frames, rotate_x, rotate_y, speed, spin);

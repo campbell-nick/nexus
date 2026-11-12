@@ -4,6 +4,11 @@
  * Every field is read straight from /proc, /sys or /etc. A few package-manager
  * probes (rpm, xbps, nix) use popen() for accuracy; everything else is a direct
  * file read, so startup stays fast.
+ *
+ * Gathering and layout are separate: each field appends one or more tagged
+ * entries, then info_gather_all() emits the requested ones (see `fields`) in
+ * order, followed by any custom lines and the colour palette. A custom line may
+ * reference a field with {name}.
  */
 #define _GNU_SOURCE
 #include "nexus.h"
@@ -20,10 +25,51 @@
 #include <time.h>
 #include <unistd.h>
 
-#define NEXUS_LABEL "\033[1;35m"
-
 char info_lines[NEXUS_MAX_LINES][NEXUS_MAX_LINE_LEN];
 int info_line_count = 0;
+
+/* ------------------------------------------------------------- styling */
+/* Label/value styling, overridable from the config file or the command line. */
+static char g_sep[16] = ":";
+static char g_key_color[32] = "1;35";
+static char g_value_color[32] = "";
+
+/* Custom lines supplied by the user, and the title format. */
+static char custom_store[NEXUS_MAX_CUSTOM][NEXUS_MAX_LINE_LEN];
+static int custom_count = 0;
+static char title_fmt[NEXUS_MAX_LINE_LEN] = "";
+
+/* Cached identity for {user} / {hostname} placeholders. */
+static char title_user[64] = "";
+static char title_host[64] = "";
+
+void info_configure(const char *separator, const char *key_color,
+                    const char *value_color) {
+  if (separator)
+    snprintf(g_sep, sizeof(g_sep), "%s",
+             strcmp(separator, "default") == 0 ? ":" : separator);
+  if (key_color)
+    snprintf(g_key_color, sizeof(g_key_color), "%s",
+             strcmp(key_color, "default") == 0 ? "1;35" : key_color);
+  if (value_color)
+    snprintf(g_value_color, sizeof(g_value_color), "%s",
+             strcmp(value_color, "default") == 0 ? "" : value_color);
+}
+
+void info_set_title(const char *format) {
+  if (format)
+    snprintf(title_fmt, sizeof(title_fmt), "%s", format);
+}
+
+void info_set_custom(const char *const *lines, int count) {
+  custom_count = 0;
+  for (int i = 0; i < count && custom_count < NEXUS_MAX_CUSTOM; i++) {
+    if (!lines[i])
+      continue;
+    snprintf(custom_store[custom_count], NEXUS_MAX_LINE_LEN, "%s", lines[i]);
+    custom_count++;
+  }
+}
 
 /* ------------------------------------------------------------- emission */
 static void add_line(const char *line) {
@@ -34,7 +80,58 @@ static void add_line(const char *line) {
   info_line_count++;
 }
 
-static void info_emit(const char *label, const char *fmt, ...) {
+/* Tagged entry produced by a gather function: the field it belongs to, its
+ * plain value (for {name} placeholders) and the rendered line. */
+struct info_entry {
+  char field[16];
+  char value[NEXUS_MAX_LINE_LEN];
+  char line[NEXUS_MAX_LINE_LEN];
+};
+static struct info_entry entries[NEXUS_MAX_LINES];
+static int entry_count = 0;
+
+static void entry_add(const char *field, const char *value, const char *line) {
+  if (entry_count >= NEXUS_MAX_LINES)
+    return;
+  struct info_entry *e = &entries[entry_count++];
+  snprintf(e->field, sizeof(e->field), "%s", field);
+  snprintf(e->value, sizeof(e->value), "%s", value ? value : "");
+  snprintf(e->line, sizeof(e->line), "%s", line ? line : "");
+}
+
+/* Render "<label><separator> <value>" using the configured colours. "none"
+ * disables the separator/colour; an empty colour means "leave the terminal
+ * default". */
+static void build_labeled_line(char *out, size_t n, const char *label,
+                               const char *value) {
+  const char *kc = (g_key_color[0] && strcmp(g_key_color, "none") != 0)
+                       ? g_key_color
+                       : "";
+  const char *vc = (g_value_color[0] && strcmp(g_value_color, "none") != 0)
+                       ? g_value_color
+                       : "";
+  const char *sep = (g_sep[0] && strcmp(g_sep, "none") != 0) ? g_sep : "";
+
+  char head[256];
+  if (kc[0])
+    snprintf(head, sizeof(head), "\033[%sm%s\033[0m", kc, label);
+  else
+    snprintf(head, sizeof(head), "%s", label);
+
+  char tail[NEXUS_MAX_LINE_LEN];
+  if (vc[0])
+    snprintf(tail, sizeof(tail), "\033[%sm%s\033[0m", vc, value);
+  else
+    snprintf(tail, sizeof(tail), "%s", value);
+
+  if (sep[0])
+    snprintf(out, n, "%s%s %s", head, sep, tail);
+  else
+    snprintf(out, n, "%s %s", head, tail);
+}
+
+static void info_emit(const char *field, const char *label, const char *fmt,
+                      ...) {
   char val[NEXUS_MAX_LINE_LEN];
   va_list ap;
   va_start(ap, fmt);
@@ -42,37 +139,67 @@ static void info_emit(const char *label, const char *fmt, ...) {
   va_end(ap);
 
   char line[NEXUS_MAX_LINE_LEN];
-  snprintf(line, sizeof(line), NEXUS_LABEL "%s\033[0m: %s", label, val);
-  add_line(line);
+  build_labeled_line(line, sizeof(line), label, val);
+  entry_add(field, val, line);
 }
 
 /* ----------------------------------------------------------------- title */
+static void nexus_expand_placeholders(const char *src, char *out, size_t n);
+
 static void gather_title(void) {
-  char user[64] = "";
-  char host[64] = "";
   char *login = getlogin();
   if (login)
-    strncpy(user, login, sizeof(user) - 1);
+    strncpy(title_user, login, sizeof(title_user) - 1);
   else {
     char *env = getenv("USER");
     if (env)
-      strncpy(user, env, sizeof(user) - 1);
+      strncpy(title_user, env, sizeof(title_user) - 1);
   }
-  gethostname(host, sizeof(host));
-  host[sizeof(host) - 1] = '\0';
+  gethostname(title_host, sizeof(title_host));
+  title_host[sizeof(title_host) - 1] = '\0';
 
-  char line[NEXUS_MAX_LINE_LEN];
-  snprintf(line, sizeof(line), NEXUS_LABEL "%s\033[0m@\033[1;35m%s\033[0m", user,
-           host);
-  add_line(line);
+  if (strcmp(title_fmt, "none") == 0)
+    return;
 
-  int title_len = (int)strlen(user) + 1 + (int)strlen(host);
-  char sep[NEXUS_MAX_LINE_LEN];
+  char text[NEXUS_MAX_LINE_LEN];
+  if (title_fmt[0] == '\0') {
+    /* Built-in: the user and host in the label colour, the '@' plain. */
+    const char *kc = (g_key_color[0] && strcmp(g_key_color, "none") != 0)
+                         ? g_key_color
+                         : "";
+    if (kc[0])
+      snprintf(text, sizeof(text), "\033[%sm%s\033[0m@\033[%sm%s\033[0m", kc,
+               title_user, kc, title_host);
+    else
+      snprintf(text, sizeof(text), "%s@%s", title_user, title_host);
+  } else {
+    char plain[NEXUS_MAX_LINE_LEN];
+    const char *kc = (g_key_color[0] && strcmp(g_key_color, "none") != 0)
+                         ? g_key_color
+                         : "";
+    /* Expand into plain first so the underline width is right. */
+    nexus_expand_placeholders(title_fmt, plain, sizeof(plain));
+    if (kc[0])
+      snprintf(text, sizeof(text), "\033[%sm%s\033[0m", kc, plain);
+    else
+      snprintf(text, sizeof(text), "%s", plain);
+  }
+
+  char value[NEXUS_MAX_LINE_LEN];
+  if (title_fmt[0] == '\0')
+    snprintf(value, sizeof(value), "%s@%s", title_user, title_host);
+  else
+    nexus_expand_placeholders(title_fmt, value, sizeof(value));
+
+  entry_add("title", value, text);
+
+  int w = nx_visible_width(value);
+  char ul[NEXUS_MAX_LINE_LEN];
   int pos = 0;
-  for (int i = 0; i < title_len && pos + 1 < NEXUS_MAX_LINE_LEN; i++)
-    sep[pos++] = '-';
-  sep[pos] = '\0';
-  add_line(sep);
+  for (int i = 0; i < w && pos + 1 < NEXUS_MAX_LINE_LEN; i++)
+    ul[pos++] = '-';
+  ul[pos] = '\0';
+  entry_add("title", "", ul);
 }
 
 /* ------------------------------------------------------------ small I/O */
@@ -128,7 +255,7 @@ static void gather_os(void) {
 #ifdef __APPLE__
   struct utsname u;
   uname(&u);
-  info_emit("OS", "macOS %s", u.machine);
+  info_emit("os", "OS", "macOS %s", u.machine);
 #else
   char pretty[128] = "";
   FILE *fp = fopen("/etc/os-release", "r");
@@ -155,7 +282,7 @@ static void gather_os(void) {
     strcpy(pretty, "Linux");
   struct utsname u;
   uname(&u);
-  info_emit("OS", "%s %s", pretty, u.machine);
+  info_emit("os", "OS", "%s %s", pretty, u.machine);
 #endif
 }
 
@@ -172,9 +299,9 @@ static void gather_host(void) {
     vendor[0] = '\0';
   if (model[0]) {
     if (vendor[0])
-      info_emit("Host", "%s %s", vendor, model);
+      info_emit("host", "Host", "%s %s", vendor, model);
     else
-      info_emit("Host", "%s", model);
+      info_emit("host", "Host", "%s", model);
   }
 #endif
 }
@@ -182,7 +309,7 @@ static void gather_host(void) {
 static void gather_kernel(void) {
   struct utsname u;
   uname(&u);
-  info_emit("Kernel", "%s %s", u.sysname, u.release);
+  info_emit("kernel", "Kernel", "%s %s", u.sysname, u.release);
 }
 
 static void gather_uptime(void) {
@@ -222,7 +349,7 @@ static void gather_uptime(void) {
              hours == 1 ? "" : "s", mins, mins == 1 ? "" : "s");
   else
     snprintf(val, sizeof(val), "%d min%s", mins, mins == 1 ? "" : "s");
-  info_emit("Uptime", "%s", val);
+  info_emit("uptime", "Uptime", "%s", val);
 }
 
 /* Birth time (creation time) of the root filesystem, if the kernel and
@@ -285,7 +412,7 @@ static void gather_age(void) {
              months == 1 ? "" : "s", rem_days, rem_days == 1 ? "" : "s");
   else
     snprintf(val, sizeof(val), "%lld day%s", days, days == 1 ? "" : "s");
-  info_emit("Age", "%s", val);
+  info_emit("age", "Age", "%s", val);
 }
 
 static void gather_packages(void) {
@@ -365,7 +492,7 @@ static void gather_packages(void) {
 #endif
 
   if (val[0])
-    info_emit("Packages", "%s", val);
+    info_emit("packages", "Packages", "%s", val);
 }
 
 static int looks_like_shell(const char *s) {
@@ -402,7 +529,7 @@ static void gather_shell(void) {
 
   char *name = strrchr(shell, '/');
   name = name ? name + 1 : shell;
-  info_emit("Shell", "%s", name);
+  info_emit("shell", "Shell", "%s", name);
 }
 
 /* Copy the value after the ':' on a /proc/cpuinfo line whose key matches. */
@@ -438,7 +565,7 @@ static void gather_cpu(void) {
     pclose(fp);
   }
   if (name[0])
-    info_emit("CPU", "%s", name);
+    info_emit("cpu", "CPU", "%s", name);
 #else
   char name[128] = "";
   char hw[128] = "";
@@ -515,11 +642,11 @@ static void gather_cpu(void) {
 
   if (name[0]) {
     if (cores > 0 && max_ghz > 0)
-      info_emit("CPU", "%s (%d) @ %.2f GHz", name, cores, max_ghz);
+      info_emit("cpu", "CPU", "%s (%d) @ %.2f GHz", name, cores, max_ghz);
     else if (cores > 0)
-      info_emit("CPU", "%s (%d)", name, cores);
+      info_emit("cpu", "CPU", "%s (%d)", name, cores);
     else
-      info_emit("CPU", "%s", name);
+      info_emit("cpu", "CPU", "%s", name);
   }
 #endif
 }
@@ -587,7 +714,7 @@ static void gather_gpu(void) {
       name = driver;
 
     if (name)
-      info_emit("GPU", "%s", name);
+      info_emit("gpu", "GPU", "%s", name);
   }
   closedir(d);
 #endif
@@ -614,8 +741,8 @@ static void gather_memory(void) {
   float total_gib = total / 1048576.0f;
   int pct = (int)((total - avail) * 100 / total);
   const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
-  info_emit("Memory", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)", used_gib,
-            total_gib, color, pct);
+  info_emit("memory", "Memory", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
+            used_gib, total_gib, color, pct);
 #endif
 }
 
@@ -631,8 +758,8 @@ static void gather_swap(void) {
         total_mb > 0) {
       int pct = (int)(used_mb * 100 / total_mb);
       const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
-      info_emit("Swap", "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)", used_mb,
-                total_mb, color, pct);
+      info_emit("swap", "Swap", "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)",
+                used_mb, total_mb, color, pct);
     }
   }
   pclose(fp);
@@ -655,10 +782,10 @@ static void gather_swap(void) {
   int pct = (int)(used * 100 / total);
   const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
   if (total >= 1048576)
-    info_emit("Swap", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
+    info_emit("swap", "Swap", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
               used / 1048576.0f, total / 1048576.0f, color, pct);
   else
-    info_emit("Swap", "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)",
+    info_emit("swap", "Swap", "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)",
               used / 1024.0f, total / 1024.0f, color, pct);
 #endif
 }
@@ -690,18 +817,58 @@ static void gather_disk(void) {
   }
 
   if (fstype[0])
-    info_emit("Disk (/)", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m) - %s",
+    info_emit("disk", "Disk (/)", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m) - %s",
               used_gib, total_gib, color, pct, fstype);
   else
-    info_emit("Disk (/)", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)", used_gib,
-              total_gib, color, pct);
+    info_emit("disk", "Disk (/)", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
+              used_gib, total_gib, color, pct);
+}
+
+/* -------------------------------------------------------- placeholders */
+/* Replace {name} in src with the matching field's value (or {user}/{hostname}).
+ * Unknown placeholders are left untouched. */
+static void nexus_expand_placeholders(const char *src, char *out, size_t n) {
+  size_t o = 0;
+  for (const char *p = src; *p && o + 1 < n;) {
+    if (*p == '{') {
+      const char *close = strchr(p + 1, '}');
+      if (close) {
+        char name[64];
+        size_t len = (size_t)(close - (p + 1));
+        if (len < sizeof(name)) {
+          memcpy(name, p + 1, len);
+          name[len] = '\0';
+          const char *val = NULL;
+          if (strcmp(name, "user") == 0)
+            val = title_user;
+          else if (strcmp(name, "hostname") == 0)
+            val = title_host;
+          else
+            for (int i = 0; i < entry_count && !val; i++)
+              if (strcmp(entries[i].field, name) == 0)
+                val = entries[i].value;
+          if (val) {
+            size_t vl = strlen(val);
+            if (o + vl >= n)
+              vl = n - o - 1;
+            memcpy(out + o, val, vl);
+            o += vl;
+            p = close + 1;
+            continue;
+          }
+        }
+      }
+    }
+    out[o++] = *p++;
+  }
+  out[o] = '\0';
 }
 
 /* -------------------------------------------------------------- palette */
 /* Two rows of eight blocks showing the 16 standard terminal colours, with a
  * blank line above to set them apart from the fields. Colour 0-7 is drawn with
  * the normal background SGR codes and 8-15 with the bright ones. */
-void info_add_palette(void) {
+static void emit_palette(void) {
   add_line("");
 
   for (int row = 0; row < 2; row++) {
@@ -718,8 +885,37 @@ void info_add_palette(void) {
 }
 
 /* -------------------------------------------------------------- dispatch */
-void info_gather_all(void) {
-  info_line_count = 0;
+static int is_known_field(const char *name) {
+  static const char *known[] = {"title",  "os",     "host",  "kernel",
+                                "uptime", "age",    "packages", "shell",
+                                "cpu",    "gpu",    "memory", "swap",
+                                "disk",   "custom", "palette", "all", NULL};
+  for (int i = 0; known[i]; i++)
+    if (strcmp(name, known[i]) == 0)
+      return 1;
+  return 0;
+}
+
+static void emit_field(const char *name) {
+  if (!is_known_field(name)) {
+    fprintf(stderr, "nexus: unknown field '%s' (see nexus.conf)\n", name);
+    return;
+  }
+  for (int i = 0; i < entry_count; i++)
+    if (strcmp(entries[i].field, name) == 0)
+      add_line(entries[i].line);
+}
+
+static void emit_custom(void) {
+  for (int i = 0; i < custom_count; i++) {
+    char line[NEXUS_MAX_LINE_LEN];
+    nexus_expand_placeholders(custom_store[i], line, sizeof(line));
+    add_line(line);
+  }
+}
+
+void info_gather_all(const char *fields, int show_palette) {
+  entry_count = 0;
   gather_title();
   gather_os();
   gather_host();
@@ -733,4 +929,54 @@ void info_gather_all(void) {
   gather_memory();
   gather_swap();
   gather_disk();
+
+  info_line_count = 0;
+
+  static const char *DEFAULT_ORDER = "title os host kernel uptime age packages "
+                                     "shell cpu gpu memory swap disk custom "
+                                     "palette";
+
+  const char *order = (fields && fields[0]) ? fields : DEFAULT_ORDER;
+  int custom_done = 0, palette_done = 0;
+
+  char work[512];
+  snprintf(work, sizeof(work), "%s", order);
+  char *save1 = NULL;
+  for (char *tok = strtok_r(work, ", \t", &save1); tok;
+       tok = strtok_r(NULL, ", \t", &save1)) {
+    if (strcmp(tok, "custom") == 0) {
+      emit_custom();
+      custom_done = 1;
+    } else if (strcmp(tok, "palette") == 0) {
+      if (show_palette)
+        emit_palette();
+      palette_done = 1;
+    } else if (strcmp(tok, "all") == 0) {
+      char work2[512];
+      snprintf(work2, sizeof(work2), "%s", DEFAULT_ORDER);
+      char *save2 = NULL;
+      for (char *t2 = strtok_r(work2, ", \t", &save2); t2;
+           t2 = strtok_r(NULL, ", \t", &save2)) {
+        if (strcmp(t2, "custom") == 0) {
+          emit_custom();
+          custom_done = 1;
+        } else if (strcmp(t2, "palette") == 0) {
+          if (show_palette)
+            emit_palette();
+          palette_done = 1;
+        } else {
+          emit_field(t2);
+        }
+      }
+    } else {
+      emit_field(tok);
+    }
+  }
+
+  /* Custom lines and the palette are never dropped silently: if `fields` did
+   * not mention them they are appended at the end. */
+  if (!custom_done)
+    emit_custom();
+  if (!palette_done && show_palette)
+    emit_palette();
 }

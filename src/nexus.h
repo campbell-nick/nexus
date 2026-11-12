@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define NEXUS_VERSION "1.5.0"
-#define NEXUS_CODENAME "Anchor"
+#define NEXUS_VERSION "1.6.0"
+#define NEXUS_CODENAME "Prism"
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
@@ -23,8 +23,9 @@
 #define NEXUS_MAX_POINTS 200000
 #define NEXUS_MAX_LOGO_ROWS 64
 #define NEXUS_MAX_LOGO_COLS 128
-#define NEXUS_MAX_LINES 32
+#define NEXUS_MAX_LINES 48
 #define NEXUS_MAX_LINE_LEN 512
+#define NEXUS_MAX_CUSTOM 16
 
 /* Render settings, all overridable from the command line. */
 struct nexus_options {
@@ -77,10 +78,22 @@ const char *logo_distro_color(const char *id);
 extern char info_lines[NEXUS_MAX_LINES][NEXUS_MAX_LINE_LEN];
 extern int info_line_count;
 
-void info_gather_all(void);
-
-/* Append the terminal colour palette to the info block. */
-void info_add_palette(void);
+/* Style the label/value pair before gathering. Pass NULL or "" to keep the
+ * built-in default for that part (separator ":", key colour "1;35", values
+ * uncoloured). */
+void info_configure(const char *separator, const char *key_color,
+                    const char *value_color);
+/* Title format: NULL or "" keeps the built-in "user@host"; "none" hides the
+ * title; anything else is used verbatim with {user} and {hostname} replaced. */
+void info_set_title(const char *format);
+/* Supply custom info lines; each may contain {field} placeholders. */
+void info_set_custom(const char *const *lines, int count);
+/* Gather every field, then lay the info block out in the requested order.
+ * `fields` is a comma/space list of field names (title, os, host, kernel,
+ * uptime, age, packages, shell, cpu, gpu, memory, swap, disk, custom, palette);
+ * NULL or "" uses the built-in order. `show_palette` appends the colour
+ * palette unless it was placed explicitly. */
+void info_gather_all(const char *fields, int show_palette);
 
 /* -------------------------------------------------------------- config.c */
 /* Create ~/.config/nexus/nexus.conf with a template if it does not exist. */
@@ -88,9 +101,17 @@ void config_ensure(void);
 /* Look up a key in the config file, copying its value into out. Returns 1 when
  * the key is present, 0 when the file or the key is missing. */
 int config_get(const char *key, char *out, size_t outlen);
+/* Use a specific config file (from --config or --profile) instead of the
+ * default ~/.config/nexus/nexus.conf. */
+void config_set_path(const char *path);
+/* Collect every value for a repeated key into out (up to max). Returns the
+ * number of values found. */
+int config_get_all(const char *key, char (*out)[NEXUS_MAX_LINE_LEN], int max);
 
 /* -------------------------------------------------------------- render.c */
 void render_set_shading(const char *chars);
+/* Put the logo on the right of the info block instead of the left. */
+void render_set_logo_side(int right);
 void render_run(int show_info, int use_color, int max_frames, int rotate_x,
                 int rotate_y, float speed, int spin);
 

@@ -140,6 +140,11 @@ void render_set_shading(const char *chars) {
   parse_shading((chars && chars[0]) ? chars : NEXUS_RAMP_ASCII);
 }
 
+/* Which side of the info block the logo sits on. */
+static int logo_side_right = 0;
+
+void render_set_logo_side(int right) { logo_side_right = right; }
+
 /* --------------------------------------------------------------- buffers */
 static float zbuf[NEXUS_MAX_HEIGHT][NEXUS_ANIM_WIDTH];
 static float lumbuf[NEXUS_MAX_HEIGHT][NEXUS_ANIM_WIDTH];
@@ -538,7 +543,7 @@ static void render_run_2d(int show_info, int use_color) {
   }
 
   size_t cap = (size_t)(lines + 2) *
-                   ((size_t)logo_cols * 16 + NEXUS_MAX_LINE_LEN + 64) +
+                   ((size_t)logo_cols * 16 + (size_t)NEXUS_MAX_LINE_LEN * 2 + 64) +
                64;
   char *buf = malloc(cap);
   if (!buf)
@@ -551,24 +556,45 @@ static void render_run_2d(int show_info, int use_color) {
 
   for (int i = 0; i < lines; i++) {
     int has_logo = i < logo_rows;
-    if (has_logo)
-      p = emit_logo_row(p, end, i, use_color);
 
-    if (show_info && !stacked) {
-      int pad = logo_cols - (has_logo ? logo_cell_counts[i] : 0);
+    if (show_info && !stacked && logo_side_right) {
+      /* Info first (padded to a fixed column), then the logo. */
+      int fi = i - fetch_start;
+      int have_info = fi >= 0 && fi < info_line_count;
+      if (have_info)
+        p = nx_emit_clipped(p, end, info_lines[fi], clip);
+      int w = have_info ? nx_visible_width(info_lines[fi]) : 0;
+      if (clip >= 0 && w > clip)
+        w = clip;
+      int pad = info_cols - w;
       while (pad-- > 0 && p + 4 < end)
         *p++ = ' ';
       if (p + gap + 4 < end) {
         memset(p, ' ', gap);
         p += gap;
       }
-      int fi = i - fetch_start;
-      if (fi >= 0 && fi < info_line_count)
-        p = nx_emit_clipped(p, end, info_lines[fi], clip);
-    } else if (stacked && !has_logo) {
-      int fi = i - logo_rows - 1; /* first row below the logo is blank */
-      if (fi >= 0 && fi < info_line_count)
-        p = nx_emit_clipped(p, end, info_lines[fi], clip);
+      if (has_logo)
+        p = emit_logo_row(p, end, i, use_color);
+    } else {
+      if (has_logo)
+        p = emit_logo_row(p, end, i, use_color);
+
+      if (show_info && !stacked) {
+        int pad = logo_cols - (has_logo ? logo_cell_counts[i] : 0);
+        while (pad-- > 0 && p + 4 < end)
+          *p++ = ' ';
+        if (p + gap + 4 < end) {
+          memset(p, ' ', gap);
+          p += gap;
+        }
+        int fi = i - fetch_start;
+        if (fi >= 0 && fi < info_line_count)
+          p = nx_emit_clipped(p, end, info_lines[fi], clip);
+      } else if (stacked && !has_logo) {
+        int fi = i - logo_rows - 1; /* first row below the logo is blank */
+        if (fi >= 0 && fi < info_line_count)
+          p = nx_emit_clipped(p, end, info_lines[fi], clip);
+      }
     }
 
     if (use_color && p + 4 < end) {
@@ -584,6 +610,73 @@ static void render_run_2d(int show_info, int use_color) {
     return;
   }
   free(buf);
+}
+
+/* Emit one row of the shaded 3D logo into the frame buffer. Colour changes are
+ * coalesced, and the buffer is left reset when colour was in use. */
+static char *emit_3d_logo_row(char *p, char *end, int i, int aw, int smax,
+                              int use_color, const char *reset_seq,
+                              int inner_len, int outer_len) {
+  if (!use_color) {
+    for (int j = 0; j < aw && p + 8 < end; j++) {
+      int c = 0;
+      const char *sc = cell_glyph(i, j, smax, &c);
+      if (!sc) {
+        *p++ = ' ';
+        continue;
+      }
+      int k = 0;
+      while (k < 4 && sc[k]) {
+        p[k] = sc[k];
+        k++;
+      }
+      p += k ? k : 1;
+    }
+    return p;
+  }
+
+  static char ansi_tbl[128][8];
+  static int ansi_len[128];
+  int prev_color = -1;
+  for (int j = 0; j < aw && p + 16 < end; j++) {
+    int c = 0;
+    const char *sc = cell_glyph(i, j, smax, &c);
+    if (!sc) {
+      if (prev_color != -1) {
+        memcpy(p, reset_seq, 4);
+        p += 4;
+        prev_color = -1;
+      }
+      *p++ = ' ';
+    } else {
+      if (c != prev_color) {
+        if (logo_has_ansi && c > 0 && c < 128) {
+          if (!ansi_len[c])
+            ansi_len[c] = snprintf(ansi_tbl[c], sizeof(ansi_tbl[c]),
+                                   "\033[1;%dm", c);
+          memcpy(p, ansi_tbl[c], ansi_len[c]);
+          p += ansi_len[c];
+        } else {
+          const char *cs = (c == 1) ? g_color_inner : g_color_outer;
+          int clen = (c == 1) ? inner_len : outer_len;
+          memcpy(p, cs, clen);
+          p += clen;
+        }
+        prev_color = c;
+      }
+      int k = 0;
+      while (k < 4 && sc[k]) {
+        p[k] = sc[k];
+        k++;
+      }
+      p += k ? k : 1;
+    }
+  }
+  if (prev_color != -1 && p + 4 < end) {
+    memcpy(p, reset_seq, 4);
+    p += 4;
+  }
+  return p;
 }
 
 /* --------------------------------------------------------------- the loop */
@@ -750,75 +843,40 @@ void render_run(int show_info, int use_color, int max_frames, int rotate_x,
     const char reset_seq[] = "\033[0m";
     const char clr_seq[] = "\033[K";
 
-    static char ansi_tbl[128][8];
-    static int ansi_len[128];
     int inner_len = (int)strlen(g_color_inner);
     int outer_len = (int)strlen(g_color_outer);
 
     for (int i = 0; i < render_height && p + 8 < end; i++) {
-      if (!use_color) {
-        for (int j = 0; j < aw && p + 8 < end; j++) {
-          int c = 0;
-          const char *sc = cell_glyph(i, j, smax, &c);
-          if (!sc) {
-            *p++ = ' ';
-            continue;
-          }
-          int k = 0;
-          while (k < 4 && sc[k]) {
-            p[k] = sc[k];
-            k++;
-          }
-          p += k ? k : 1;
-        }
-      } else {
-        int prev_color = -1;
-        for (int j = 0; j < aw && p + 16 < end; j++) {
-          int c = 0;
-          const char *sc = cell_glyph(i, j, smax, &c);
-          if (!sc) {
-            if (prev_color != -1) {
-              memcpy(p, reset_seq, 4);
-              p += 4;
-              prev_color = -1;
-            }
-            *p++ = ' ';
-          } else {
-            if (c != prev_color) {
-              if (logo_has_ansi && c > 0 && c < 128) {
-                if (!ansi_len[c])
-                  ansi_len[c] = snprintf(ansi_tbl[c], sizeof(ansi_tbl[c]),
-                                         "\033[1;%dm", c);
-                memcpy(p, ansi_tbl[c], ansi_len[c]);
-                p += ansi_len[c];
-              } else {
-                const char *cs = (c == 1) ? g_color_inner : g_color_outer;
-                int clen = (c == 1) ? inner_len : outer_len;
-                memcpy(p, cs, clen);
-                p += clen;
-              }
-              prev_color = c;
-            }
-            int k = 0;
-            while (k < 4 && sc[k]) {
-              p[k] = sc[k];
-              k++;
-            }
-            p += k ? k : 1;
-          }
-        }
-        if (prev_color != -1 && p + 4 < end) {
-          memcpy(p, reset_seq, 4);
-          p += 4;
-        }
-      }
-
       int fi = i - fetch_start;
-      if (!layout_stacked && fi >= 0 && fi < info_line_count &&
-          p + NEXUS_GAP + 4 < end) {
-        memset(p, ' ', NEXUS_GAP);
-        p += NEXUS_GAP;
-        p = nx_emit_clipped(p, end, info_lines[fi], info_clip_cols);
+      int have_info = !layout_stacked && fi >= 0 && fi < info_line_count;
+
+      if (logo_side_right) {
+        /* Info first (padded to a fixed column), then the logo. */
+        if (have_info)
+          p = nx_emit_clipped(p, end, info_lines[fi], info_clip_cols);
+        int pad = info_clip_cols;
+        if (pad >= 0) {
+          int w = have_info ? nx_visible_width(info_lines[fi]) : 0;
+          if (w > pad)
+            w = pad;
+          pad -= w;
+          while (pad-- > 0 && p + 1 < end)
+            *p++ = ' ';
+        }
+        if (p + NEXUS_GAP < end) {
+          memset(p, ' ', NEXUS_GAP);
+          p += NEXUS_GAP;
+        }
+        p = emit_3d_logo_row(p, end, i, aw, smax, use_color, reset_seq,
+                             inner_len, outer_len);
+      } else {
+        p = emit_3d_logo_row(p, end, i, aw, smax, use_color, reset_seq,
+                             inner_len, outer_len);
+        if (have_info && p + NEXUS_GAP + 4 < end) {
+          memset(p, ' ', NEXUS_GAP);
+          p += NEXUS_GAP;
+          p = nx_emit_clipped(p, end, info_lines[fi], info_clip_cols);
+        }
       }
 
       if (p + 8 >= end)

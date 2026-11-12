@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-12
+
+### Added
+
+- Customisable info block, fastfetch-style but in the existing `key = value`
+  config:
+  - `--fields` (and `fields =`) choose which fields show and in what order,
+    including `custom` and `palette`; `all` restores the default order.
+  - `--custom` (repeatable, and repeated `custom =` lines) add extra lines that
+    may reference any field, plus `{user}` and `{hostname}`.
+  - `--title` sets the title format (`{user}`/`{hostname}`, or `none`).
+  - `--separator`, `--key-color` and `--value-color` restyle the label/value
+    pairs (`none` disables the separator or a colour).
+- `--logo-side left|right` (and `logo_side =`) to put the logo on the right of
+  the info block. It works in both the spinning 3D and plain 2D modes.
+- `--config <path>` and `--profile <name>` load an alternative config file
+  (`~/.config/nexus/<name>.conf` for a profile), so named presets are easy.
+
 ## [1.5.0] - 2026-11-12
 
 ### Added
@@ -87,7 +105,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and Tux fallbacks. `--logo <name|path>` selects one explicitly.
 - Package counts for emerge, pacman, dpkg, rpm, xbps, apk, eopkg and nix.
 
-[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/campbell-nick/nexus/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/campbell-nick/nexus/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/campbell-nick/nexus/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/campbell-nick/nexus/compare/v1.2.0...v1.3.0

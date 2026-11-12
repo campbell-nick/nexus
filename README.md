@@ -81,6 +81,15 @@ nix build .#musl     # same source linked against musl, statically (Linux)
 | `--no-spin` | Draw the plain 2D logo instead of the spinning 3D one |
 | `--frames <n>` | Stop after `n` frames (default: run until a keypress) |
 | `--shading-chars <str>` | Custom shading ramp (UTF-8 aware) |
+| `--fields <list>` | Info fields to show, in order; `all` for the default order |
+| `--custom <text>` | Add a line to the info block; repeatable, `{field}` expands |
+| `--title <format>` | Title line; `{user}`/`{hostname}`; `none` hides it |
+| `--separator <glyph>` | Label/value separator; `none` for a space |
+| `--key-color <sgr>` | SGR for labels (default `1;35`); `none` for no colour |
+| `--value-color <sgr>` | SGR for values (default: terminal default) |
+| `--logo-side <left\|right>` | Which side the logo sits on (default `left`) |
+| `--config <path>` | Read this config file instead of the default |
+| `--profile <name>` | Read `~/.config/nexus/<name>.conf` |
 | `-h`, `--help` | Show help |
 | `-V`, `--version` | Show version |
 
@@ -132,7 +141,9 @@ distributions keep the default magenta/white scheme.
 
 By default the logo is lifted into a height map and rendered as a spinning 3D
 relief. Pass `--no-spin` (or set `spin = false`) to draw it flat instead,
-exactly as the source art, and exit.
+exactly as the source art, and exit. The logo sits on the left of the info
+block; put it on the right with `--logo-side right` (or `logo_side = right`).
+When the terminal is too narrow, the info is stacked below the logo instead.
 
 ## Shading
 
@@ -170,28 +181,60 @@ option has a matching key, and **flags always win over the file**:
 | `color`         | `true`/`false`                  | `--no-color` (inverse)|
 | `palette`       | `true`/`false`                  | `--no-palette` (inverse)|
 | `spin`          | `true`/`false`                  | `--no-spin` (inverse) |
+| `fields`        | comma/space list of field names | `--fields`            |
+| `custom`        | text; repeatable, `{field}` expands | `--custom`        |
+| `title`         | format with `{user}`/`{hostname}`, or `none` | `--title` |
+| `separator`     | glyph, or `none`                | `--separator`         |
+| `key_color`     | SGR parameters, e.g. `1;35`     | `--key-color`         |
+| `value_color`   | SGR parameters                  | `--value-color`       |
+| `logo_side`     | `left` or `right`               | `--logo-side`         |
 
 Booleans also accept `yes`/`no`, `on`/`off` and `1`/`0`. A `default` value (or
 a value equal to the built-in default) leaves the built-in behaviour in place.
 An unknown value prints a warning and keeps the built-in default.
 
+A profile is just another config file: `--profile work` reads
+`~/.config/nexus/work.conf`, and `--config <path>` reads an arbitrary file. The
+usual precedence applies, so flags still win over the file.
+
 ## Info fields
 
-The default (and only) field set is deliberately small and cheap to gather:
+The default field set is deliberately small and cheap to gather:
 
 ```
-os, host, kernel, uptime, age, packages, shell, cpu, gpu, memory, swap, disk
+title, os, host, kernel, uptime, age, packages, shell, cpu, gpu, memory, swap, disk, palette
 ```
 
-A `user@host` title with a separator line is always shown above them. `age` is
-how long ago the distribution was installed, taken from the root filesystem's
+`title` is the `user@host` line with a separator rule under it. `age` is how
+long ago the distribution was installed, taken from the root filesystem's
 birth time; it is omitted when the filesystem does not report one. Package
 counts come from emerge, pacman, dpkg, rpm, xbps, apk, eopkg or nix, whichever
 is present.
 
+Choose and order the fields with `--fields` (or `fields =`):
+
+```
+./nexus --fields "os, kernel, cpu, memory, custom, palette"
+```
+
+Custom lines are added with `--custom` (or repeated `custom =` lines). They may
+reference any field, plus `{user}` and `{hostname}`:
+
+```
+./nexus --custom "Welcome back, {user}!" --custom "uptime: {uptime}"
+```
+
+The title, separator and colours are configurable too:
+
+```
+./nexus --title "{user} on {hostname}" --separator "->" --key-color "1;36"
+./nexus --title none            # hide the title line
+```
+
 Below the fields, nexus draws the 16 standard terminal colours as two rows of
-eight blocks. Hide it with `--no-palette` (or `palette = false`); it is also
-hidden by `--no-info` and `--no-color`.
+eight blocks (place it with `palette` in `--fields`). Hide it with
+`--no-palette` (or `palette = false`); it is also hidden by `--no-info` and
+`--no-color`.
 
 ## Layout
 
