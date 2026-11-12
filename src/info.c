@@ -13,6 +13,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/utsname.h>
@@ -226,14 +227,32 @@ static void gather_uptime(void) {
 
 /* Birth time (creation time) of the root filesystem, if the kernel and
  * filesystem report one. */
+/* statx() is available on glibc >= 2.28 and musl >= 1.2.4. The Makefile probes
+ * for it and defines NEXUS_HAVE_STATX=1; when built by hand we fall back to the
+ * libc's own STATX_BTIME feature macro. The flags below are part of the stable
+ * kernel ABI, so defining any the headers miss keeps older libcs working. */
+#ifndef NEXUS_HAVE_STATX
+#if defined(STATX_BTIME)
+#define NEXUS_HAVE_STATX 1
+#else
+#define NEXUS_HAVE_STATX 0
+#endif
+#endif
+#if NEXUS_HAVE_STATX
+#ifndef STATX_BTIME
+#define STATX_BTIME 0x800U
+#endif
+#ifndef AT_STATX_SYNC_AS_STAT
+#define AT_STATX_SYNC_AS_STAT 0x0000
+#endif
+#endif
+
 static long long root_birth_time(void) {
 #ifdef __APPLE__
   struct stat st;
   if (stat("/", &st) == 0 && st.st_birthtimespec.tv_sec > 0)
     return (long long)st.st_birthtimespec.tv_sec;
-#elif defined(STATX_BTIME)
-  /* glibc >= 2.28 and musl >= 1.2.4 provide statx(); older libcs fall through
-   * and simply omit the Age field. */
+#elif defined(__linux__) && NEXUS_HAVE_STATX
   struct statx stx;
   if (statx(AT_FDCWD, "/", AT_STATX_SYNC_AS_STAT, STATX_BTIME, &stx) == 0 &&
       (stx.stx_mask & STATX_BTIME) && stx.stx_btime.tv_sec > 0)
@@ -386,6 +405,26 @@ static void gather_shell(void) {
   info_emit("Shell", "%s", name);
 }
 
+/* Copy the value after the ':' on a /proc/cpuinfo line whose key matches. */
+static int cpuinfo_value(const char *line, const char *key, char *out,
+                         size_t outlen) {
+  size_t klen = strlen(key);
+  if (strncmp(line, key, klen) != 0)
+    return 0;
+  const char *colon = strchr(line, ':');
+  if (!colon)
+    return 0;
+  const char *val = colon + 1;
+  while (*val == ' ' || *val == '\t')
+    val++;
+  size_t len = strcspn(val, "\r\n");
+  if (len == 0 || len >= outlen)
+    return 0;
+  memcpy(out, val, len);
+  out[len] = '\0';
+  return 1;
+}
+
 static void gather_cpu(void) {
 #ifdef __APPLE__
   FILE *fp = popen("sysctl -n machdep.cpu.brand_string 2>/dev/null", "r");
@@ -402,6 +441,7 @@ static void gather_cpu(void) {
     info_emit("CPU", "%s", name);
 #else
   char name[128] = "";
+  char hw[128] = "";
   int cores = 0;
   float max_ghz = 0;
 
@@ -409,43 +449,45 @@ static void gather_cpu(void) {
   if (fp) {
     char buf[256];
     while (fgets(buf, sizeof(buf), fp)) {
-      if (!name[0] && strncmp(buf, "model name", 10) == 0) {
-        char *val = strchr(buf, ':');
-        if (val) {
-          val++;
-          while (*val == ' ')
-            val++;
-          int len = (int)strlen(val);
-          while (len > 0 && (val[len - 1] == '\n' || val[len - 1] == '\r'))
-            len--;
-          if (len > 0 && len < (int)sizeof(name)) {
-            memcpy(name, val, len);
-            name[len] = '\0';
-            char *at = strstr(name, " @ ");
-            if (at)
-              *at = '\0';
-          }
-        }
+      /* x86 and most arm64 kernels use "model name"; some arm64 and 32-bit ARM
+       * boards use "Model" or "Hardware" instead. Take the first of each. */
+      if (!name[0] &&
+          (cpuinfo_value(buf, "model name", name, sizeof(name)) ||
+           cpuinfo_value(buf, "Model", name, sizeof(name)))) {
+        char *at = strstr(name, " @ ");
+        if (at)
+          *at = '\0';
       }
+      if (!hw[0])
+        cpuinfo_value(buf, "Hardware", hw, sizeof(hw));
       if (strncmp(buf, "processor", 9) == 0)
         cores++;
     }
     fclose(fp);
   }
 
+  /* Boards that report nothing useful in /proc/cpuinfo (most ARM SBCs and
+   * Apple Silicon) expose a name through the device tree. Apple's entry is the
+   * machine model, so keep only the product part; others are used verbatim. */
   if (!name[0]) {
     char model[128] = "";
     if (nx_read_first_line("/proc/device-tree/model", model, sizeof(model))) {
-      char *paren = strchr(model, '(');
-      if (paren) {
-        paren++;
-        char *comma = strchr(paren, ',');
-        char *end = comma ? comma : strchr(paren, ')');
-        if (end)
-          snprintf(name, sizeof(name), "Apple %.*s", (int)(end - paren), paren);
+      if (strncmp(model, "Apple", 5) == 0) {
+        char *paren = strchr(model, '(');
+        if (paren) {
+          paren++;
+          char *comma = strchr(paren, ',');
+          char *end = comma ? comma : strchr(paren, ')');
+          if (end && end > paren)
+            snprintf(name, sizeof(name), "Apple %.*s", (int)(end - paren), paren);
+        }
       }
+      if (!name[0])
+        snprintf(name, sizeof(name), "%s", model);
     }
   }
+  if (!name[0] && hw[0])
+    snprintf(name, sizeof(name), "%s", hw);
 
   DIR *cpufreq = opendir("/sys/devices/system/cpu/cpufreq");
   if (cpufreq) {
@@ -526,6 +568,20 @@ static void gather_gpu(void) {
       name = "AMD Graphics";
     else if (strcmp(driver, "nvidia") == 0 || strcmp(driver, "nouveau") == 0)
       name = "NVIDIA GPU";
+    /* ARM SoC GPUs: the DRM driver name says nothing to a user, so map the
+     * common ones to their vendor. */
+    else if (strcmp(driver, "vc4") == 0 || strcmp(driver, "v3d") == 0)
+      name = "Broadcom VideoCore";
+    else if (strcmp(driver, "msm") == 0)
+      name = "Qualcomm Adreno";
+    else if (strcmp(driver, "panfrost") == 0 || strcmp(driver, "panthor") == 0)
+      name = "ARM Mali";
+    else if (strcmp(driver, "lima") == 0)
+      name = "ARM Mali";
+    else if (strcmp(driver, "etnaviv") == 0)
+      name = "Vivante GPU";
+    else if (strcmp(driver, "rockchip") == 0)
+      name = "ARM Mali";
     else if (driver[0] && strcmp(driver, "simpledrm") != 0 &&
              strcmp(driver, "simple-framebuffer") != 0)
       name = driver;

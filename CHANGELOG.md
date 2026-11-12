@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-12
+
+### Added
+
+- Portability: the same source now builds against both **musl** and **glibc**
+  (and with gcc or clang). New `make musl`, `make static`/`STATIC=1` targets and
+  a `statx()` feature probe, so the `age` field works where available and is
+  omitted on older libcs.
+- Architecture support beyond x86_64: CPU detection reads the `Model`/`Hardware`
+  fields and falls back to `/proc/device-tree/model`, and the GPU field maps
+  common ARM SoC drivers (Broadcom VideoCore, Qualcomm Adreno, ARM Mali,
+  Vivante) in addition to Intel, AMD and NVIDIA.
+- A GitHub Actions build matrix covering glibc (gcc and clang), native musl,
+  Alpine/musl, and aarch64/armv7 cross builds run under qemu.
+
 ## [1.3.0] - 2026-11-12
 
 ### Added
@@ -63,7 +78,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and Tux fallbacks. `--logo <name|path>` selects one explicitly.
 - Package counts for emerge, pacman, dpkg, rpm, xbps, apk, eopkg and nix.
 
-[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/campbell-nick/nexus/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/campbell-nick/nexus/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/campbell-nick/nexus/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/campbell-nick/nexus/compare/v1.0.0...v1.1.0

@@ -1,0 +1,99 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Native glibc, both compilers.
+  glibc:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (${{ matrix.cc }})
+        run: |
+          make clean
+          make CC=${{ matrix.cc }}
+      - name: Run
+        run: ./nexus --version
+
+  # Native musl via the musl-gcc wrapper, statically linked.
+  musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install musl toolchain
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Build (musl)
+        run: |
+          make clean
+          make CC=musl-gcc STATIC=1
+      - name: Run
+        run: ./nexus --version
+
+  # Alpine ships musl by default.
+  alpine:
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    steps:
+      - name: Install git and toolchain
+        run: apk add --no-cache git build-base
+      - uses: actions/checkout@v4
+      - name: Build (Alpine/musl)
+        run: |
+          make clean
+          make
+      - name: Run
+        run: ./nexus --version
+
+  # Cross-compile for other architectures and run under qemu.
+  cross:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64
+            cc: aarch64-linux-gnu-gcc
+            pkg: gcc-aarch64-linux-gnu
+            qemu: qemu-aarch64
+          - target: armv7
+            cc: arm-linux-gnueabihf-gcc
+            pkg: gcc-arm-linux-gnueabihf
+            qemu: qemu-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross toolchain and qemu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.pkg }} qemu-user
+      - name: Build (${{ matrix.target }})
+        run: |
+          make clean
+          make CC=${{ matrix.cc }} LDFLAGS="-static"
+      - name: Run under qemu
+        run: ${{ matrix.qemu }} ./nexus --version
+
+  # aarch64 against musl, fully static, run under qemu.
+  cross-musl-aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install qemu
+        run: sudo apt-get update && sudo apt-get install -y qemu-user
+      - name: Fetch musl cross toolchain
+        run: |
+          curl -fsSL -o musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
+          tar xzf musl.tgz
+      - name: Build (aarch64 musl)
+        run: |
+          make clean
+          make CC="$PWD/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc" STATIC=1
+      - name: Run under qemu
+        run: qemu-aarch64 ./nexus --version

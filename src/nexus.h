@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define NEXUS_VERSION "1.3.0"
-#define NEXUS_CODENAME "Aperture"
+#define NEXUS_VERSION "1.4.0"
+#define NEXUS_CODENAME "Nomad"
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
