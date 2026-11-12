@@ -33,6 +33,8 @@ make static        # same thing
 
 # Cross-compiling for another architecture, e.g. 64-bit ARM:
 make CC=aarch64-linux-musl-gcc STATIC=1
+# ...or, with no separate toolchain, using zig's bundled musl:
+make CC="zig cc -target aarch64-linux-musl" STATIC=1
 ```
 
 It runs on **x86_64, aarch64/arm64, armv7 and other Linux architectures**: CPU

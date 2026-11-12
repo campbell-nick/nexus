@@ -80,21 +80,20 @@ jobs:
       - name: Run under qemu
         run: ${{ matrix.qemu }} ./nexus --version
 
-  # aarch64 against musl, fully static, run under qemu.
+  # aarch64 against musl, fully static, run under qemu. Zig bundles musl and
+  # cross-compiles reliably, unlike downloading a separate toolchain.
   cross-musl-aarch64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
       - name: Install qemu
         run: sudo apt-get update && sudo apt-get install -y qemu-user
-      - name: Fetch musl cross toolchain
-        run: |
-          curl -fsSL --retry 8 --retry-delay 5 --retry-all-errors --connect-timeout 30 \
-            -o musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
-          tar xzf musl.tgz
       - name: Build (aarch64 musl)
         run: |
           make clean
-          make CC="$PWD/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc" STATIC=1
+          make CC="zig cc -target aarch64-linux-musl" STATIC=1
       - name: Run under qemu
         run: qemu-aarch64 ./nexus --version
