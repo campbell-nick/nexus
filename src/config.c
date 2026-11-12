@@ -47,7 +47,10 @@ static const char CONFIG_TEMPLATE[] =
     "info = true\n"
     "\n"
     "# Colour the logo.\n"
-    "color = true\n";
+    "color = true\n"
+    "\n"
+    "# Show the 16-colour terminal palette under the info (hidden by --no-color).\n"
+    "palette = true\n";
 
 /* Build the config file path. Returns 0 when no home directory is known. */
 static int config_path(char *buf, size_t n) {

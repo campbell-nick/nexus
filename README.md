@@ -127,6 +127,7 @@ option has a matching key, and **flags always win over the file**:
 | `frames`        | count; `0` = until a keypress   | `--frames`            |
 | `info`          | `true`/`false`                  | `--no-info` (inverse) |
 | `color`         | `true`/`false`                  | `--no-color` (inverse)|
+| `palette`       | `true`/`false`                  | `--no-palette` (inverse)|
 
 Booleans also accept `yes`/`no`, `on`/`off` and `1`/`0`. A `default` value (or
 a value equal to the built-in default) leaves the built-in behaviour in place.
@@ -145,6 +146,10 @@ how long ago the distribution was installed, taken from the root filesystem's
 birth time; it is omitted when the filesystem does not report one. Package
 counts come from emerge, pacman, dpkg, rpm, xbps, apk, eopkg or nix, whichever
 is present.
+
+Below the fields, nexus draws the 16 standard terminal colours as two rows of
+eight blocks. Hide it with `--no-palette` (or `palette = false`); it is also
+hidden by `--no-info` and `--no-color`.
 
 ## Layout
 

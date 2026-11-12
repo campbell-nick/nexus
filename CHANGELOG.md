@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-12
+
+### Added
+
+- Colour palette: the 16 standard terminal colours are drawn as two rows of
+  eight blocks under the info, fastfetch-style. Hide it with `--no-palette` or
+  `palette = false`; it is also hidden by `--no-info` and `--no-color`.
+
 ## [1.2.0] - 2026-11-12
 
 ### Added
@@ -55,7 +63,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and Tux fallbacks. `--logo <name|path>` selects one explicitly.
 - Package counts for emerge, pacman, dpkg, rpm, xbps, apk, eopkg and nix.
 
-[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/campbell-nick/nexus/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/campbell-nick/nexus/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/campbell-nick/nexus/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/campbell-nick/nexus/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/campbell-nick/nexus/releases/tag/v1.0.0

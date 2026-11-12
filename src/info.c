@@ -641,6 +641,26 @@ static void gather_disk(void) {
               total_gib, color, pct);
 }
 
+/* -------------------------------------------------------------- palette */
+/* Two rows of eight blocks showing the 16 standard terminal colours, with a
+ * blank line above to set them apart from the fields. Colour 0-7 is drawn with
+ * the normal background SGR codes and 8-15 with the bright ones. */
+void info_add_palette(void) {
+  add_line("");
+
+  for (int row = 0; row < 2; row++) {
+    char line[NEXUS_MAX_LINE_LEN];
+    int pos = 0;
+    for (int i = 0; i < 8; i++) {
+      int c = row * 8 + i;
+      int sgr = c < 8 ? 40 + c : 100 + (c - 8);
+      pos += snprintf(line + pos, sizeof(line) - (size_t)pos, "\033[%dm   ", sgr);
+    }
+    snprintf(line + pos, sizeof(line) - (size_t)pos, "\033[0m");
+    add_line(line);
+  }
+}
+
 /* -------------------------------------------------------------- dispatch */
 void info_gather_all(void) {
   info_line_count = 0;

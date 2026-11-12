@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define NEXUS_VERSION "1.2.0"
-#define NEXUS_CODENAME "Facet"
+#define NEXUS_VERSION "1.3.0"
+#define NEXUS_CODENAME "Aperture"
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
@@ -78,6 +78,9 @@ extern char info_lines[NEXUS_MAX_LINES][NEXUS_MAX_LINE_LEN];
 extern int info_line_count;
 
 void info_gather_all(void);
+
+/* Append the terminal colour palette to the info block. */
+void info_add_palette(void);
 
 /* -------------------------------------------------------------- config.c */
 /* Create ~/.config/nexus/nexus.conf with a template if it does not exist. */
