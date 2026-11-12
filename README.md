@@ -52,6 +52,18 @@ sudo make install            # installs to /usr/local/bin/nexus
 PREFIX=~/.local make install # ...or into your home
 ```
 
+## Nix
+
+A `flake.nix` is included, so Nix users can build and develop without installing
+a toolchain:
+
+```
+nix build            # -> ./result/bin/nexus
+nix run              # build and run
+nix develop          # dev shell with gcc, clang and make
+nix build .#musl     # same source linked against musl, statically (Linux)
+```
+
 ## Options
 
 | Flag | Description |

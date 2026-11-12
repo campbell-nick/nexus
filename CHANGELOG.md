@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A `flake.nix`, so Nix users can `nix build`, `nix run`, `nix develop`, and
+  build the static musl variant with `nix build .#musl`.
+
 ## [1.4.0] - 2026-11-12
 
 ### Added
