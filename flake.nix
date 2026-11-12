@@ -9,7 +9,6 @@
         "x86_64-linux"
         "aarch64-linux"
         "armv7l-linux"
-        "x86_64-darwin"
         "aarch64-darwin"
       ];
 
@@ -51,7 +50,7 @@
         {
           default = mkNexus pkgs [ ];
         }
-        // nixpkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+        // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           # Same source linked against musl, statically.
           musl = mkNexus pkgs.pkgsMusl [ "STATIC=1" ];
         });
