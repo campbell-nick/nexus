@@ -24,6 +24,7 @@ static const char CONFIG_TEMPLATE[] =
     "# ignored. Command-line flags always win over this file.\n"
     "\n"
     "# Logo: a file path, or a distro/logo name such as \"arch\". Empty = auto.\n"
+    "# Paths may start with ~ (expanded to $HOME).\n"
     "logo =\n"
     "\n"
     "# Which side of the info block the logo sits on: left or right.\n"

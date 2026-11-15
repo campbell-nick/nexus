@@ -96,7 +96,7 @@ nix build .#musl     # same source linked against musl, statically (Linux)
 
 A logo is chosen automatically, in this order:
 
-1. `--logo <path>` — an explicit file
+1. `logo = <path>` in the config, or `--logo <path>` — an explicit file
 2. `~/.config/nexus/logo.txt`
 3. **fastfetch** — if installed, its built-in library supplies a full colour
    logo for the detected distribution
@@ -122,6 +122,10 @@ file instead:
 ```
 ./nexus --logo ~/art/logo.txt
 ```
+
+The same can be set in the config (`logo = /home/you/art/logo.txt`). A leading
+`~` is expanded to `$HOME`, so `logo = ~/art/logo.txt` works too. Relative
+paths are resolved from the directory nexus runs in.
 
 A logo file is plain text. An optional first line `# distro: <name>` overrides
 the detected distribution, which selects both the logo and its colour:
@@ -168,7 +172,7 @@ option has a matching key, and **flags always win over the file**:
 
 | Key             | Values                          | Equivalent flag       |
 | --------------- | ------------------------------- | --------------------- |
-| `logo`          | file path or distro/logo name   | `--logo`              |
+| `logo`          | file path (`~` = `$HOME`) or distro/logo name | `--logo`    |
 | `shading_chars` | any ramp; `default` for built-in| `--shading-chars`     |
 | `rotation`      | `x`, `y` or `both`              | `--rotate-x`/`--rotate-y` |
 | `speed`         | number, e.g. `1.0`              | `--speed`             |

@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A leading `~` in a logo path (`logo = ~/...` or `--logo ~/...`) is now
+  expanded to `$HOME`.
+
 ### Changed
 
 - `--help` is now a compact, one-line-per-option listing.

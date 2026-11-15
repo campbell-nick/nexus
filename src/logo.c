@@ -166,10 +166,22 @@ static void trim_row(char *buf) {
     buf[--len] = '\0';
 }
 
+/* Expand a leading "~" or "~/" to $HOME, writing into `out`. Any other path
+ * (and a "~" with no HOME set) is copied through unchanged. */
+static void expand_home(const char *path, char *out, size_t outsz) {
+  const char *home = getenv("HOME");
+  if (path[0] == '~' && (path[1] == '\0' || path[1] == '/') && home && home[0])
+    snprintf(out, outsz, "%s%s", home, path + 1);
+  else
+    snprintf(out, outsz, "%s", path);
+}
+
 /* Load a logo from an explicit path. A leading "# distro: <name>" line sets
- * the colour scheme and is not drawn. */
+ * the colour scheme and is not drawn. A leading "~" is expanded to $HOME. */
 int logo_load_path(const char *path) {
-  FILE *fp = fopen(path, "r");
+  char expanded[512];
+  expand_home(path, expanded, sizeof(expanded));
+  FILE *fp = fopen(expanded, "r");
   if (!fp)
     return 0;
 
