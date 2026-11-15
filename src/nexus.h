@@ -96,13 +96,14 @@ void info_set_custom(const char *const *lines, int count);
 void info_gather_all(const char *fields, int show_palette);
 
 /* -------------------------------------------------------------- config.c */
-/* Create ~/.config/nexus/nexus.conf with a template if it does not exist. */
+/* Create ~/.config/nexus/nexus.json with a template if it does not exist. */
 void config_ensure(void);
 /* Look up a key in the config file, copying its value into out. Returns 1 when
- * the key is present, 0 when the file or the key is missing. */
+ * the key is present, 0 when the file or the key is missing. An array value is
+ * joined with ", ". */
 int config_get(const char *key, char *out, size_t outlen);
 /* Use a specific config file (from --config or --profile) instead of the
- * default ~/.config/nexus/nexus.conf. */
+ * default ~/.config/nexus/nexus.json. */
 void config_set_path(const char *path);
 /* Collect every value for a repeated key into out (up to max). Returns the
  * number of values found. */

@@ -8,17 +8,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- A leading `~` in a logo path (`logo = ~/...` or `--logo ~/...`) is now
+- A leading `~` in a logo path (`"logo": "~/..."` or `--logo ~/...`) is now
   expanded to `$HOME`.
 
 ### Changed
 
+- The config file is now JSON (`~/.config/nexus/nexus.json`, or
+  `$XDG_CONFIG_HOME/nexus/nexus.json`). It is a flat object; `//` and `/* */`
+  comments and trailing commas are allowed. `fields` and `custom` may be
+  arrays. An existing `nexus.conf` is migrated automatically and kept as
+  `nexus.conf.bak`. Profiles are `<name>.json`.
 - `--help` is now a compact, one-line-per-option listing.
 
 ### Removed
 
 - The `--custom` command-line flag. Custom info lines are configured only with
-  repeated `custom =` lines in the config file.
+  the `custom` array in the config file.
 
 ## [1.7.0] - 2026-11-12
 

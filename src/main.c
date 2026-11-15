@@ -65,11 +65,11 @@ static void print_help(void) {
       "  --key-color <sgr>         SGR for labels (default 1;35)\n"
       "  --value-color <sgr>       SGR for values (default: terminal default)\n"
       "  --config <path>           Read this config file instead of the default\n"
-      "  --profile <name>          Read ~/.config/nexus/<name>.conf\n"
+      "  --profile <name>          Read ~/.config/nexus/<name>.json\n"
       "  -V, --version             Show version\n"
       "  -h, --help                Show this help\n\n"
-      "Config: ~/.config/nexus/nexus.conf (key = value, mirrors the flags\n"
-      "above; see the README for details).\n");
+      "Config: ~/.config/nexus/nexus.json (JSON, mirrors the flags above;\n"
+      "see the README for details).\n");
 }
 
 static void print_version(void) {
@@ -84,7 +84,7 @@ static void print_version(void) {
 }
 
 /* Resolve a --profile name to a config path. A name containing a slash is
- * taken as a path; otherwise it lives beside the default nexus.conf. */
+ * taken as a path; otherwise it lives beside the default nexus.json. */
 static void config_use_profile(const char *name) {
   if (strchr(name, '/')) {
     config_set_path(name);
@@ -93,7 +93,7 @@ static void config_use_profile(const char *name) {
   char path[512];
   const char *base = getenv("XDG_CONFIG_HOME");
   if (base && base[0]) {
-    snprintf(path, sizeof(path), "%s/nexus/%s.conf", base, name);
+    snprintf(path, sizeof(path), "%s/nexus/%s.json", base, name);
     config_set_path(path);
     return;
   }
@@ -102,7 +102,7 @@ static void config_use_profile(const char *name) {
     config_set_path(name);
     return;
   }
-  snprintf(path, sizeof(path), "%s/.config/nexus/%s.conf", home, name);
+  snprintf(path, sizeof(path), "%s/.config/nexus/%s.json", home, name);
   config_set_path(path);
 }
 
@@ -288,7 +288,7 @@ int main(int argc, char **argv) {
   }
 
   /* ---------------------------------------------------------- config file */
-  /* Values from ~/.config/nexus/nexus.conf fill in whatever the command line
+  /* Values from ~/.config/nexus/nexus.json fill in whatever the command line
    * did not set; flags always win. */
   if (!config_explicit)
     config_ensure();
@@ -374,7 +374,7 @@ int main(int argc, char **argv) {
       cfg_side[0] && strcasecmp(cfg_side, "default") != 0)
     logo_side = cfg_side;
 
-  /* Custom lines come from every `custom =` line in the config, in order. */
+  /* Custom lines come from the "custom" array in the config, in order. */
   const char *custom_use[NEXUS_MAX_CUSTOM];
   int custom_use_count = 0;
   int n_custom = config_get_all("custom", cfg_custom, NEXUS_MAX_CUSTOM);

@@ -88,7 +88,7 @@ nix build .#musl     # same source linked against musl, statically (Linux)
 | `--value-color <sgr>` | SGR for values (default: terminal default) |
 | `--logo-side <left\|right>` | Which side the logo sits on (default `left`) |
 | `--config <path>` | Read this config file instead of the default |
-| `--profile <name>` | Read `~/.config/nexus/<name>.conf` |
+| `--profile <name>` | Read `~/.config/nexus/<name>.json` |
 | `-h`, `--help` | Show help |
 | `-V`, `--version` | Show version |
 
@@ -143,9 +143,9 @@ embedded set) are tinted with the distribution's canonical colour. Unknown
 distributions keep the default magenta/white scheme.
 
 By default the logo is lifted into a height map and rendered as a spinning 3D
-relief. Pass `--no-spin` (or set `spin = false`) to draw it flat instead,
+relief. Pass `--no-spin` (or set `"spin": false`) to draw it flat instead,
 exactly as the source art, and exit. The logo sits on the left of the info
-block; put it on the right with `--logo-side right` (or `logo_side = right`).
+block; put it on the right with `--logo-side right` (or `"logo_side": "right"`).
 When the terminal is too narrow, the info is stacked below the logo instead.
 
 ## Shading
@@ -159,16 +159,17 @@ Brightness is mapped onto a ramp, one character per cell. The built-in ramp is
 
 or in the config file (see below):
 
-```
-shading_chars = o
+```json
+{ "shading_chars": "o" }
 ```
 
 ## Configuration
 
-On first run nexus writes `~/.config/nexus/nexus.conf` (honouring
-`XDG_CONFIG_HOME`) with a commented template. It is a list of `key = value`
-lines; blank lines and lines starting with `#` are ignored. Every command-line
-option has a matching key, and **flags always win over the file**:
+On first run nexus writes `~/.config/nexus/nexus.json` (honouring
+`XDG_CONFIG_HOME`) with a commented template. It is a flat JSON object; `//` and
+`/* */` comments and trailing commas are allowed, so the template stays
+self-documenting. Every command-line option has a matching key, and **flags
+always win over the file**:
 
 | Key             | Values                          | Equivalent flag       |
 | --------------- | ------------------------------- | --------------------- |
@@ -184,20 +185,36 @@ option has a matching key, and **flags always win over the file**:
 | `color`         | `true`/`false`                  | `--no-color` (inverse)|
 | `palette`       | `true`/`false`                  | `--no-palette` (inverse)|
 | `spin`          | `true`/`false`                  | `--no-spin` (inverse) |
-| `fields`        | comma/space list of field names | `--fields`            |
-| `custom`        | text; repeatable, `{field}` expands | —                 |
+| `fields`        | field names, as a string or array | `--fields`          |
+| `custom`        | text or array of text; `{field}` expands | —            |
 | `title`         | format with `{user}`/`{hostname}`, or `none` | `--title` |
 | `separator`     | glyph, or `none`                | `--separator`         |
 | `key_color`     | SGR parameters, e.g. `1;35`     | `--key-color`         |
 | `value_color`   | SGR parameters                  | `--value-color`       |
 | `logo_side`     | `left` or `right`               | `--logo-side`         |
 
-Booleans also accept `yes`/`no`, `on`/`off` and `1`/`0`. A `default` value (or
-a value equal to the built-in default) leaves the built-in behaviour in place.
-An unknown value prints a warning and keeps the built-in default.
+Boolean keys take native `true`/`false`, or the strings `yes`/`no`, `on`/`off`
+and `1`/`0`. A `default` value (or a value equal to the built-in default) leaves
+the built-in behaviour in place. An unknown value prints a warning and keeps the
+built-in default.
+
+`fields` and `custom` may be JSON arrays, which reads more naturally than one
+comma-separated string:
+
+```json
+{
+  "logo": "~/art/logo.txt",
+  "fields": ["os", "kernel", "custom", "palette"],
+  "custom": ["Welcome back, {user}!", "uptime: {uptime}"],
+  "spin": false
+}
+```
+
+A `nexus.conf` from an earlier version is migrated to `nexus.json`
+automatically on first run and kept as `nexus.conf.bak`.
 
 A profile is just another config file: `--profile work` reads
-`~/.config/nexus/work.conf`, and `--config <path>` reads an arbitrary file. The
+`~/.config/nexus/work.json`, and `--config <path>` reads an arbitrary file. The
 usual precedence applies, so flags still win over the file.
 
 ## Info fields
@@ -231,20 +248,22 @@ no duplication on NixOS unless you ask for it. Add it below `packages` with:
 ./nexus --fields "os, packages, nix, shell, cpu, memory"
 ```
 
-Choose and order the fields with `--fields` (or `fields =`):
+Choose and order the fields with `--fields` (or the `fields` key):
 
 ```
 ./nexus --fields "os, kernel, cpu, memory, custom, palette"
 ```
 
-Custom lines are added with repeated `custom =` lines in the config file (there
-is no command-line flag for them). Each may reference any field, plus `{user}`
-and `{hostname}`:
+Custom lines are added with the `custom` array in the config file (there is no
+command-line flag for them). Each may reference any field, plus `{user}` and
+`{hostname}`:
 
-```
-# ~/.config/nexus/nexus.conf
-custom = Welcome back, {user}!
-custom = uptime: {uptime}
+```json
+// ~/.config/nexus/nexus.json
+"custom": [
+  "Welcome back, {user}!",
+  "uptime: {uptime}"
+]
 ```
 
 The title, separator and colours are configurable too:
@@ -256,7 +275,7 @@ The title, separator and colours are configurable too:
 
 Below the fields, nexus draws the 16 standard terminal colours as two rows of
 eight blocks (place it with `palette` in `--fields`). Hide it with
-`--no-palette` (or `palette = false`); it is also hidden by `--no-info` and
+`--no-palette` (or `"palette": false`); it is also hidden by `--no-info` and
 `--no-color`.
 
 ## Layout

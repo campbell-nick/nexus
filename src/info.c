@@ -1009,7 +1009,7 @@ static int is_known_field(const char *name) {
 
 static void emit_field(const char *name) {
   if (!is_known_field(name)) {
-    fprintf(stderr, "nexus: unknown field '%s' (see nexus.conf)\n", name);
+    fprintf(stderr, "nexus: unknown field '%s' (see nexus.json)\n", name);
     return;
   }
   for (int i = 0; i < entry_count; i++)
