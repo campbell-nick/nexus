@@ -75,6 +75,7 @@ nix build .#musl     # same source linked against musl, statically (Linux)
 | `--size <float>` | Scale the logo (e.g. `2.0` for double size) |
 | `--depth <float>` | Scale the 3D depth (default `1.0`) |
 | `--height <n>` | Override the render height in rows |
+| `--gap <n>` | Spaces between the logo and the info block (default `2`) |
 | `--no-info` | Just the logo, no system info |
 | `--no-color` | Disable logo coloring |
 | `--no-palette` | Hide the 16-colour terminal palette |
@@ -186,6 +187,7 @@ always win over the file**:
 | `size`          | number, e.g. `1.0`              | `--size`              |
 | `depth`         | number, e.g. `1.0`              | `--depth`             |
 | `height`        | rows; `0` = auto                | `--height`            |
+| `gap`           | spaces; `2` = default           | `--gap`               |
 | `frames`        | count; `0` = until a keypress   | `--frames`            |
 | `info`          | `true`/`false`                  | `--no-info` (inverse) |
 | `color`         | `true`/`false`                  | `--no-color` (inverse)|

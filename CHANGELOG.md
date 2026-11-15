@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `--gap <n>` / `"gap"` to set the number of spaces between the logo and the
+  info block (default `2`).
 - `--logo-color <sgr>` / `"logo_color"` to override a plain logo's tint with
   any SGR parameter list (e.g. `38;5;208` for orange); `none` disables it.
   Empty (the default) keeps the detected distribution's colour.

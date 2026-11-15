@@ -211,8 +211,8 @@ static void render_apply_layout(int show_info) {
         info_cols = w;
     }
 
-  if (show_info && cols < NEXUS_ANIM_WIDTH + NEXUS_GAP + info_cols) {
-    anim_width = cols - NEXUS_GAP - info_cols;
+  if (show_info && cols < NEXUS_ANIM_WIDTH + g_opts.gap + info_cols) {
+    anim_width = cols - g_opts.gap - info_cols;
     if (anim_width < 20) {
       layout_stacked = 1;
       anim_width = cols < NEXUS_ANIM_WIDTH ? cols : NEXUS_ANIM_WIDTH;
@@ -241,7 +241,7 @@ static void render_apply_layout(int show_info) {
     info_clip_cols = cols;
   } else {
     if (show_info)
-      info_clip_cols = cols - anim_width - NEXUS_GAP;
+      info_clip_cols = cols - anim_width - g_opts.gap;
     if (rows > 0 && render_height > rows)
       render_height = rows;
     logo_height = render_height > wcap ? wcap : render_height;
@@ -516,7 +516,7 @@ static char *emit_logo_row(char *p, char *end, int row, int use_color) {
 static void render_run_2d(int show_info, int use_color) {
   get_term_size(&term_rows, &term_cols);
 
-  const int gap = NEXUS_GAP;
+  const int gap = g_opts.gap;
   const int fetch_start = show_info ? 1 : 0; /* info starts on the second row */
 
   int info_cols = 0;
@@ -863,18 +863,18 @@ void render_run(int show_info, int use_color, int max_frames, int rotate_x,
           while (pad-- > 0 && p + 1 < end)
             *p++ = ' ';
         }
-        if (p + NEXUS_GAP < end) {
-          memset(p, ' ', NEXUS_GAP);
-          p += NEXUS_GAP;
+        if (p + g_opts.gap < end) {
+          memset(p, ' ', g_opts.gap);
+          p += g_opts.gap;
         }
         p = emit_3d_logo_row(p, end, i, aw, smax, use_color, reset_seq,
                              inner_len, outer_len);
       } else {
         p = emit_3d_logo_row(p, end, i, aw, smax, use_color, reset_seq,
                              inner_len, outer_len);
-        if (have_info && p + NEXUS_GAP + 4 < end) {
-          memset(p, ' ', NEXUS_GAP);
-          p += NEXUS_GAP;
+        if (have_info && p + g_opts.gap + 4 < end) {
+          memset(p, ' ', g_opts.gap);
+          p += g_opts.gap;
           p = nx_emit_clipped(p, end, info_lines[fi], info_clip_cols);
         }
       }

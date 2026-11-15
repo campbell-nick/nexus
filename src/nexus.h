@@ -18,7 +18,7 @@
 
 #define NEXUS_ANIM_WIDTH 60
 #define NEXUS_MAX_HEIGHT 200
-#define NEXUS_GAP 2
+#define NEXUS_GAP 2 /* default spaces between the logo and the info block */
 
 #define NEXUS_MAX_POINTS 200000
 #define NEXUS_MAX_LOGO_ROWS 64
@@ -33,6 +33,7 @@ struct nexus_options {
   float size;
   float depth;
   int depth_user_set;
+  int gap; /* spaces between the logo and the info block */
 };
 extern struct nexus_options g_opts;
 

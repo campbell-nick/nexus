@@ -54,6 +54,7 @@ static void print_help(void) {
       "  --size <float>            Logo scale (default 1.0)\n"
       "  --depth <float>           3D depth (default 1.0)\n"
       "  --height <n>              Render height in rows (0 = auto)\n"
+      "  --gap <n>                 Spaces between the logo and the info (default 2)\n"
       "  --frames <n>              Stop after n frames (0 = until a key)\n"
       "  --no-spin                 Plain 2D logo instead of the 3D spin\n"
       "  --no-info                 Logo only, no system info\n"
@@ -133,12 +134,13 @@ int main(int argc, char **argv) {
       color_given = 0, shading_given = 0, palette_given = 0, spin_given = 0,
       fields_given = 0, title_given = 0, separator_given = 0,
       key_color_given = 0, value_color_given = 0, logo_side_given = 0,
-      logo_color_given = 0;
+      logo_color_given = 0, gap_given = 0;
 
   g_opts.height = 0; /* 0 = auto (fit the info block) */
   g_opts.size = 1.0f;
   g_opts.depth = 1.0f;
   g_opts.depth_user_set = 0;
+  g_opts.gap = NEXUS_GAP;
 
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -271,6 +273,15 @@ int main(int argc, char **argv) {
       if (!nx_parse_integer(option, argv[++i], 1, NEXUS_MAX_HEIGHT, &g_opts.height))
         return 1;
       height_given = 1;
+    } else if (strcmp(argv[i], "--gap") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      const char *option = argv[i];
+      if (!nx_parse_integer(option, argv[++i], 0, 40, &g_opts.gap))
+        return 1;
+      gap_given = 1;
     } else if (strcmp(argv[i], "--size") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -354,6 +365,8 @@ int main(int argc, char **argv) {
   }
   if (!height_given && config_get("height", cfg, sizeof(cfg)) && cfg[0])
     nx_parse_integer("height", cfg, 0, NEXUS_MAX_HEIGHT, &g_opts.height);
+  if (!gap_given && config_get("gap", cfg, sizeof(cfg)) && cfg[0])
+    nx_parse_integer("gap", cfg, 0, 40, &g_opts.gap);
   if (!frames_given && config_get("frames", cfg, sizeof(cfg)) && cfg[0])
     nx_parse_integer("frames", cfg, 0, 0x7fffffff, &max_frames);
   if (!info_given && config_get("info", cfg, sizeof(cfg)) && cfg[0])
