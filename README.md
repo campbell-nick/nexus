@@ -87,6 +87,7 @@ nix build .#musl     # same source linked against musl, statically (Linux)
 | `--key-color <sgr>` | SGR for labels (default `1;35`); `none` for no colour |
 | `--value-color <sgr>` | SGR for values (default: terminal default) |
 | `--logo-side <left\|right>` | Which side the logo sits on (default `left`) |
+| `--logo-color <sgr>` | Logo tint as SGR params (e.g. `38;5;208` for orange); `none` for no colour |
 | `--config <path>` | Read this config file instead of the default |
 | `--profile <name>` | Read `~/.config/nexus/<name>.json` |
 | `-h`, `--help` | Show help |
@@ -142,6 +143,11 @@ borrowed from fastfetch keep their own ANSI colours; plain logos (files or the
 embedded set) are tinted with the distribution's canonical colour. Unknown
 distributions keep the default magenta/white scheme.
 
+Override the tint with `--logo-color` (or `"logo_color"`): any SGR parameter
+list works, so `--logo-color 38;5;208` paints a plain logo orange and
+`--logo-color none` leaves it uncoloured. It applies to plain logos only —
+fastfetch logos keep their own colours.
+
 By default the logo is lifted into a height map and rendered as a spinning 3D
 relief. Pass `--no-spin` (or set `"spin": false`) to draw it flat instead,
 exactly as the source art, and exit. The logo sits on the left of the info
@@ -192,6 +198,7 @@ always win over the file**:
 | `key_color`     | SGR parameters, e.g. `1;35`     | `--key-color`         |
 | `value_color`   | SGR parameters                  | `--value-color`       |
 | `logo_side`     | `left` or `right`               | `--logo-side`         |
+| `logo_color`    | SGR parameters, e.g. `38;5;208`; `none` = no colour | `--logo-color` |
 
 Boolean keys take native `true`/`false`, or the strings `yes`/`no`, `on`/`off`
 and `1`/`0`. A `default` value (or a value equal to the built-in default) leaves

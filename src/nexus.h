@@ -68,6 +68,9 @@ int logo_load_builtin(const char *id);
 void logo_load_default(void);
 int logo_detect_distro(char *out, int maxlen);
 void logo_set_distro_colors(const char *distro);
+/* Override the logo tint with an SGR parameter list (e.g. "38;5;208"); "none"
+ * clears the colour. Empty/NULL/"default" leaves the current tint in place. */
+void logo_set_color(const char *sgr);
 
 /* ------------------------------------------------------------- distros.c */
 /* Embedded plain-text logos used when fastfetch is unavailable. */

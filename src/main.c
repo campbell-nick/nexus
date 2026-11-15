@@ -48,6 +48,7 @@ static void print_help(void) {
       "Usage: nexus [options]\n\n"
       "  -l, --logo <name|path>    Logo name (e.g. arch) or logo file\n"
       "  --logo-side <left|right>  Side the logo sits on (default left)\n"
+      "  --logo-color <sgr>        Logo tint as SGR (e.g. 38;5;208); 'none' = plain\n"
       "  --rotate-x | --rotate-y   Lock rotation to one axis\n"
       "  -s, --speed <float>       Animation speed (default 1.0)\n"
       "  --size <float>            Logo scale (default 1.0)\n"
@@ -122,6 +123,7 @@ int main(int argc, char **argv) {
   const char *key_color = NULL;
   const char *value_color = NULL;
   const char *logo_side = NULL;
+  const char *logo_color = NULL;
   int config_explicit = 0;
 
   /* Which options the command line set explicitly; the config file fills in
@@ -130,7 +132,8 @@ int main(int argc, char **argv) {
       depth_given = 0, height_given = 0, frames_given = 0, info_given = 0,
       color_given = 0, shading_given = 0, palette_given = 0, spin_given = 0,
       fields_given = 0, title_given = 0, separator_given = 0,
-      key_color_given = 0, value_color_given = 0, logo_side_given = 0;
+      key_color_given = 0, value_color_given = 0, logo_side_given = 0,
+      logo_color_given = 0;
 
   g_opts.height = 0; /* 0 = auto (fit the info block) */
   g_opts.size = 1.0f;
@@ -238,6 +241,13 @@ int main(int argc, char **argv) {
       }
       logo_side = argv[++i];
       logo_side_given = 1;
+    } else if (strcmp(argv[i], "--logo-color") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
+        return 1;
+      }
+      logo_color = argv[++i];
+      logo_color_given = 1;
     } else if (strcmp(argv[i], "--config") == 0) {
       if (i + 1 >= argc) {
         fprintf(stderr, "nexus: option '%s' requires an argument\n", argv[i]);
@@ -301,6 +311,7 @@ int main(int argc, char **argv) {
   char cfg_key[NEXUS_MAX_LINE_LEN];
   char cfg_value[NEXUS_MAX_LINE_LEN];
   char cfg_side[16];
+  char cfg_logo_color[64];
   char cfg_custom[NEXUS_MAX_CUSTOM][NEXUS_MAX_LINE_LEN];
 
   if (!logo_given && config_get("logo", cfg_logo, sizeof(cfg_logo)) && cfg_logo[0])
@@ -373,6 +384,10 @@ int main(int argc, char **argv) {
   if (!logo_side_given && config_get("logo_side", cfg_side, sizeof(cfg_side)) &&
       cfg_side[0] && strcasecmp(cfg_side, "default") != 0)
     logo_side = cfg_side;
+  if (!logo_color_given &&
+      config_get("logo_color", cfg_logo_color, sizeof(cfg_logo_color)) &&
+      cfg_logo_color[0] && strcasecmp(cfg_logo_color, "default") != 0)
+    logo_color = cfg_logo_color;
 
   /* Custom lines come from the "custom" array in the config, in order. */
   const char *custom_use[NEXUS_MAX_CUSTOM];
@@ -457,6 +472,8 @@ int main(int argc, char **argv) {
   logo_process();
   if (distro[0])
     logo_set_distro_colors(distro);
+  if (logo_color)
+    logo_set_color(logo_color);
 
   /* ------------------------------------------------------------- info */
   if (show_info) {

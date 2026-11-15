@@ -421,3 +421,20 @@ void logo_set_distro_colors(const char *distro) {
   g_color_outer = "\033[1;35m";
   g_color_inner = "\033[1;37m";
 }
+
+/* Override the logo tint with an explicit SGR parameter list (e.g. "38;5;208"
+ * for orange). "none" clears the colour so the terminal default shows;
+ * "default" (or empty) keeps the current tint. */
+void logo_set_color(const char *sgr) {
+  if (!sgr || !sgr[0] || strcasecmp(sgr, "default") == 0)
+    return;
+  static char tint[32];
+  if (strcasecmp(sgr, "none") == 0) {
+    g_color_inner = "";
+    g_color_outer = "";
+    return;
+  }
+  snprintf(tint, sizeof(tint), "\033[1;%sm", sgr);
+  g_color_inner = tint;
+  g_color_outer = tint;
+}
