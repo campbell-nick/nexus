@@ -15,6 +15,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Empty (the default) keeps the detected distribution's colour.
 - A leading `~` in a logo path (`"logo": "~/..."` or `--logo ~/...`) is now
   expanded to `$HOME`.
+- A `doc/` folder with detailed guides, split out of the README:
+  `building.md`, `musl.md`, `options.md`, `configuration.md`, `logos.md`,
+  `shading.md` and `fields.md`. `musl.md` is an in-depth musl build guide
+  (native musl, static builds, cross-compiling with crossdev, musl.cc, zig or
+  Nix); the README is now an overview that links to them.
 
 ### Changed
 
