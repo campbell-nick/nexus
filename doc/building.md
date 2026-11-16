@@ -6,8 +6,9 @@ make
 ```
 
 The build is plain C11 and works with both **glibc** and **musl**, and with
-**gcc** or **clang**. It only needs `libm` and the kernel headers; there is no
-configure step. A `statx()` feature probe enables the `age` field when the libc
+**gcc** or **clang**. It only needs `libm` and the C library's headers; there is
+no configure step. See [dependencies.md](dependencies.md) for the packages to
+install. A `statx()` feature probe enables the `age` field when the libc
 provides it (glibc ≥ 2.28, musl ≥ 1.2.4) and omits it otherwise, so the same
 source builds unchanged on older systems.
 

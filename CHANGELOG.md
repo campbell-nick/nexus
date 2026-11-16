@@ -22,6 +22,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Nix); the README is now an overview that links to them.
 - An animated `demo.gif` in the README, showing the default look (the detected
   distribution's logo spinning beside the system info).
+- A `doc/dependencies.md` guide listing the packages needed to build and run
+  nexus — a C compiler, `make`, the libc headers and `libm`, plus the optional
+  `fastfetch` runtime dependency — with per-distribution install commands.
 
 ### Changed
 

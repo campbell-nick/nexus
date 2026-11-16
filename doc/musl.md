@@ -1,7 +1,7 @@
 # Building nexus against musl
 
-`nexus` is plain C11 with no configure step. It needs only `libm` and the
-kernel headers, so the same source builds unchanged against **glibc** or
+`nexus` is plain C11 with no configure step. It needs only `libm` and the C
+library's headers, so the same source builds unchanged against **glibc** or
 **musl**. Building against musl — and especially statically — produces a single
 self-contained binary that runs on any Linux of the same architecture, with no
 runtime library dependencies.
@@ -23,7 +23,8 @@ cross-compile.
 
 ## Prerequisites
 
-- A C compiler (`gcc` or `clang`) and `make`.
+- A C compiler (`gcc` or `clang`) and `make` (see
+  [dependencies.md](dependencies.md) for the base packages).
 - For a **native** musl build: the `musl-gcc` wrapper (see below).
 - Nothing else — no `configure`, no autotools, no extra libraries.
 

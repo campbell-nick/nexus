@@ -30,6 +30,7 @@ Press any key to stop. `make install` puts it in `/usr/local/bin` (or use
 | Guide | Contents |
 | ----- | -------- |
 | [Building and installing](doc/building.md) | `make`, dependencies, install, the Nix flake |
+| [Dependencies](doc/dependencies.md) | what to install to build and run |
 | [Building against musl](doc/musl.md) | native musl, static builds, cross-compiling |
 | [Command-line options](doc/options.md) | every flag |
 | [Configuration](doc/configuration.md) | `nexus.json`, keys, profiles, custom lines |
@@ -45,6 +46,7 @@ nexus/
   demo.gif           animated demo for the README
   doc/
     building.md       build, install and the Nix flake
+    dependencies.md   packages needed to build and run
     musl.md           building against musl and cross-compiling
     options.md        command-line options
     configuration.md  config file, keys and profiles
