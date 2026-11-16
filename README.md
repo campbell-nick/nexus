@@ -13,6 +13,8 @@ logo library is used for authentic distro logos; otherwise a small embedded set
 is drawn. Linux is the primary target, with best-effort macOS support behind
 `#ifdef __APPLE__`.
 
+![nexus spinning the detected distribution's logo beside the system info](demo.gif)
+
 ## Quick start
 
 ```
@@ -40,6 +42,7 @@ Press any key to stop. `make install` puts it in `/usr/local/bin` (or use
 ```
 nexus/
   Makefile
+  demo.gif           animated demo for the README
   doc/
     building.md       build, install and the Nix flake
     musl.md           building against musl and cross-compiling

@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `shading.md` and `fields.md`. `musl.md` is an in-depth musl build guide
   (native musl, static builds, cross-compiling with crossdev, musl.cc, zig or
   Nix); the README is now an overview that links to them.
+- An animated `demo.gif` in the README, showing the default look (the detected
+  distribution's logo spinning beside the system info).
 
 ### Changed
 
