@@ -22,14 +22,16 @@ int nx_utf8_len(unsigned char c) {
   return 1;
 }
 
-/* Bytes consumed by an ANSI escape at p (ESC [ params letter), or 0. */
+/* Bytes consumed by an ANSI CSI escape at p (ESC [ ... final), or 0. */
 int nx_skip_ansi(const char *p) {
   if (p[0] != '\033' || p[1] != '[')
     return 0;
   int i = 2;
-  while (p[i] && ((p[i] >= '0' && p[i] <= '9') || p[i] == ';'))
+  while (p[i] >= 0x30 && p[i] <= 0x3F) /* parameter bytes */
     i++;
-  if (p[i])
+  while (p[i] >= 0x20 && p[i] <= 0x2F) /* intermediate bytes */
+    i++;
+  if (p[i] >= 0x40 && p[i] <= 0x7E) /* final byte */
     i++;
   return i;
 }

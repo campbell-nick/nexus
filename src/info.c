@@ -148,12 +148,15 @@ static void nexus_expand_placeholders(const char *src, char *out, size_t n);
 
 static void gather_title(void) {
   char *login = getlogin();
-  if (login)
+  if (login) {
     strncpy(title_user, login, sizeof(title_user) - 1);
-  else {
+    title_user[sizeof(title_user) - 1] = '\0';
+  } else {
     char *env = getenv("USER");
-    if (env)
+    if (env) {
       strncpy(title_user, env, sizeof(title_user) - 1);
+      title_user[sizeof(title_user) - 1] = '\0';
+    }
   }
   gethostname(title_host, sizeof(title_host));
   title_host[sizeof(title_host) - 1] = '\0';
@@ -273,6 +276,7 @@ static void gather_os(void) {
         if (len > 0 && (val[len - 1] == '\'' || val[len - 1] == '"'))
           val[--len] = '\0';
         strncpy(pretty, val, sizeof(pretty) - 1);
+        pretty[sizeof(pretty) - 1] = '\0';
         break;
       }
     }
@@ -920,6 +924,7 @@ static void gather_disk(void) {
       if (sscanf(buf, "%127s %127s %31s", dev, mnt, fs) == 3 &&
           strcmp(mnt, "/") == 0) {
         strncpy(fstype, fs, sizeof(fstype) - 1);
+        fstype[sizeof(fstype) - 1] = '\0';
         break;
       }
     }

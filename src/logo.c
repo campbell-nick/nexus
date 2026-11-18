@@ -263,13 +263,19 @@ static int ff_row_blank(const char *s) {
  * fastfetch auto-detects the distribution. Returns 1 on success. */
 int logo_load_fastfetch(const char *name) {
   char cmd[256];
-  if (name && *name)
+  if (name && *name) {
+    for (const char *s = name; *s; s++) {
+      unsigned char c = (unsigned char)*s;
+      if (c == '\'' || c == '\\' || c < 0x20)
+        return 0;
+    }
     snprintf(cmd, sizeof(cmd),
              "fastfetch -c none -l '%s' -s break --pipe false 2>/dev/null",
              name);
-  else
+  } else {
     snprintf(cmd, sizeof(cmd),
              "fastfetch -c none -s break --pipe false 2>/dev/null");
+  }
 
   FILE *fp = popen(cmd, "r");
   if (!fp)
