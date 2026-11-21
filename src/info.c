@@ -9,6 +9,10 @@
  * entries, then info_gather_all() emits the requested ones (see `fields`) in
  * order, followed by any custom lines and the colour palette. A custom line may
  * reference a field with {name}.
+ *
+ * Fast-changing fields live in their own entry array so info_refresh_live() can
+ * re-read them (and rebuild the info block) without repeating the one-shot
+ * probes such as package counting, Nix store walks or CPU/GPU identification.
  */
 #define _GNU_SOURCE
 #include "nexus.h"
@@ -90,10 +94,25 @@ struct info_entry {
 static struct info_entry entries[NEXUS_MAX_LINES];
 static int entry_count = 0;
 
+/* Volatile fields (uptime, memory, swap, disk and the live-only fields below).
+ * Kept apart so a refresh can drop and rebuild just these entries. */
+static struct info_entry live_entries[NEXUS_MAX_LINES];
+static int live_count = 0;
+
 static void entry_add(const char *field, const char *value, const char *line) {
   if (entry_count >= NEXUS_MAX_LINES)
     return;
   struct info_entry *e = &entries[entry_count++];
+  snprintf(e->field, sizeof(e->field), "%s", field);
+  snprintf(e->value, sizeof(e->value), "%s", value ? value : "");
+  snprintf(e->line, sizeof(e->line), "%s", line ? line : "");
+}
+
+static void entry_add_live(const char *field, const char *value,
+                           const char *line) {
+  if (live_count >= NEXUS_MAX_LINES)
+    return;
+  struct info_entry *e = &live_entries[live_count++];
   snprintf(e->field, sizeof(e->field), "%s", field);
   snprintf(e->value, sizeof(e->value), "%s", value ? value : "");
   snprintf(e->line, sizeof(e->line), "%s", line ? line : "");
@@ -141,6 +160,19 @@ static void info_emit(const char *field, const char *label, const char *fmt,
   char line[NEXUS_MAX_LINE_LEN];
   build_labeled_line(line, sizeof(line), label, val);
   entry_add(field, val, line);
+}
+
+static void info_emit_live(const char *field, const char *label,
+                           const char *fmt, ...) {
+  char val[NEXUS_MAX_LINE_LEN];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(val, sizeof(val), fmt, ap);
+  va_end(ap);
+
+  char line[NEXUS_MAX_LINE_LEN];
+  build_labeled_line(line, sizeof(line), label, val);
+  entry_add_live(field, val, line);
 }
 
 /* ----------------------------------------------------------------- title */
@@ -353,7 +385,7 @@ static void gather_uptime(void) {
              hours == 1 ? "" : "s", mins, mins == 1 ? "" : "s");
   else
     snprintf(val, sizeof(val), "%d min%s", mins, mins == 1 ? "" : "s");
-  info_emit("uptime", "Uptime", "%s", val);
+  info_emit_live("uptime", "Uptime", "%s", val);
 }
 
 /* Birth time (creation time) of the root filesystem, if the kernel and
@@ -855,8 +887,9 @@ static void gather_memory(void) {
   float total_gib = total / 1048576.0f;
   int pct = (int)((total - avail) * 100 / total);
   const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
-  info_emit("memory", "Memory", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
-            used_gib, total_gib, color, pct);
+  info_emit_live("memory", "Memory",
+                 "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)", used_gib,
+                 total_gib, color, pct);
 #endif
 }
 
@@ -872,8 +905,9 @@ static void gather_swap(void) {
         total_mb > 0) {
       int pct = (int)(used_mb * 100 / total_mb);
       const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
-      info_emit("swap", "Swap", "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)",
-                used_mb, total_mb, color, pct);
+      info_emit_live("swap", "Swap",
+                     "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)", used_mb,
+                     total_mb, color, pct);
     }
   }
   pclose(fp);
@@ -896,11 +930,13 @@ static void gather_swap(void) {
   int pct = (int)(used * 100 / total);
   const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
   if (total >= 1048576)
-    info_emit("swap", "Swap", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
-              used / 1048576.0f, total / 1048576.0f, color, pct);
+    info_emit_live("swap", "Swap",
+                   "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
+                   used / 1048576.0f, total / 1048576.0f, color, pct);
   else
-    info_emit("swap", "Swap", "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)",
-              used / 1024.0f, total / 1024.0f, color, pct);
+    info_emit_live("swap", "Swap",
+                   "%.2f MiB / %.2f MiB (\033[%sm%d%%\033[0m)",
+                   used / 1024.0f, total / 1024.0f, color, pct);
 #endif
 }
 
@@ -915,28 +951,184 @@ static void gather_disk(void) {
   int pct = total_gib > 0 ? (int)(used_gib * 100 / total_gib) : 0;
   const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
 
-  char fstype[32] = "";
-  FILE *fp = fopen("/proc/mounts", "r");
-  if (fp) {
-    char buf[512];
-    while (fgets(buf, sizeof(buf), fp)) {
-      char dev[128], mnt[128], fs[32];
-      if (sscanf(buf, "%127s %127s %31s", dev, mnt, fs) == 3 &&
-          strcmp(mnt, "/") == 0) {
-        strncpy(fstype, fs, sizeof(fstype) - 1);
-        fstype[sizeof(fstype) - 1] = '\0';
-        break;
+  /* The filesystem type cannot change while we run, so look it up once. */
+  static char fstype[32] = "";
+  static int fstype_checked = 0;
+  if (!fstype_checked) {
+    fstype_checked = 1;
+    FILE *fp = fopen("/proc/mounts", "r");
+    if (fp) {
+      char buf[512];
+      while (fgets(buf, sizeof(buf), fp)) {
+        char dev[128], mnt[128], fs[32];
+        if (sscanf(buf, "%127s %127s %31s", dev, mnt, fs) == 3 &&
+            strcmp(mnt, "/") == 0) {
+          strncpy(fstype, fs, sizeof(fstype) - 1);
+          fstype[sizeof(fstype) - 1] = '\0';
+          break;
+        }
       }
+      fclose(fp);
     }
-    fclose(fp);
   }
 
   if (fstype[0])
-    info_emit("disk", "Disk (/)", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m) - %s",
-              used_gib, total_gib, color, pct, fstype);
+    info_emit_live("disk", "Disk (/)",
+                   "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m) - %s", used_gib,
+                   total_gib, color, pct, fstype);
   else
-    info_emit("disk", "Disk (/)", "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)",
-              used_gib, total_gib, color, pct);
+    info_emit_live("disk", "Disk (/)",
+                   "%.2f GiB / %.2f GiB (\033[%sm%d%%\033[0m)", used_gib,
+                   total_gib, color, pct);
+}
+
+/* ---------------------------------------------------------- live extras */
+/* Optional, opt-in fields that only make sense with a refreshing info block:
+ * CPU utilisation (from successive /proc/stat snapshots), load average and
+ * network throughput (from successive /proc/net/dev byte counters). They are
+ * not part of the default order; add them with --fields or the `fields` key. */
+
+static void gather_cpu_usage(void) {
+#ifdef __linux__
+  FILE *fp = fopen("/proc/stat", "r");
+  if (!fp)
+    return;
+  char line[256];
+  int ok = fgets(line, sizeof(line), fp) && strncmp(line, "cpu ", 4) == 0;
+  fclose(fp);
+  if (!ok)
+    return;
+
+  unsigned long long vals[10] = {0};
+  int n = 0;
+  const char *p = line + 4;
+  while (n < 10 && *p) {
+    while (*p == ' ')
+      p++;
+    if (*p < '0' || *p > '9')
+      break;
+    char *end = NULL;
+    vals[n++] = strtoull(p, &end, 10);
+    p = end;
+  }
+  if (n < 4)
+    return;
+
+  unsigned long long total = 0;
+  /* guest/guest_nice (columns 9-10) are already counted in user/nice. */
+  for (int i = 0; i < (n > 8 ? 8 : n); i++)
+    total += vals[i];
+  /* "idle" plus "iowait" are both idle from the scheduler's point of view. */
+  unsigned long long idle = vals[3] + (n > 4 ? vals[4] : 0);
+
+  static unsigned long long prev_total = 0, prev_idle = 0;
+  int pct = 0;
+  if (prev_total && total > prev_total) {
+    unsigned long long dt = total - prev_total;
+    unsigned long long di = idle > prev_idle ? idle - prev_idle : 0;
+    if (di > dt)
+      di = dt;
+    pct = (int)((dt - di) * 100 / dt);
+  }
+  prev_total = total;
+  prev_idle = idle;
+
+  const char *color = pct >= 80 ? "31" : pct >= 50 ? "93" : "32";
+  info_emit_live("cpu_usage", "CPU usage", "\033[%sm%d%%\033[0m", color, pct);
+#endif
+}
+
+static void gather_load(void) {
+#ifdef __APPLE__
+  double loads[3];
+  if (getloadavg(loads, 3) == 3)
+    info_emit_live("load", "Load", "%.2f, %.2f, %.2f", loads[0], loads[1],
+                   loads[2]);
+#else
+  FILE *fp = fopen("/proc/loadavg", "r");
+  if (!fp)
+    return;
+  float one = 0, five = 0, fifteen = 0;
+  if (fscanf(fp, "%f %f %f", &one, &five, &fifteen) == 3)
+    info_emit_live("load", "Load", "%.2f, %.2f, %.2f", one, five, fifteen);
+  fclose(fp);
+#endif
+}
+
+#ifdef __linux__
+static void format_rate(char *out, size_t n, double bps) {
+  static const char *units[] = {"B/s", "KiB/s", "MiB/s", "GiB/s"};
+  int u = 0;
+  while (bps >= 1024.0 && u < 3) {
+    bps /= 1024.0;
+    u++;
+  }
+  if (bps >= 100.0)
+    snprintf(out, n, "%.0f %s", bps, units[u]);
+  else if (bps >= 10.0)
+    snprintf(out, n, "%.1f %s", bps, units[u]);
+  else
+    snprintf(out, n, "%.2f %s", bps, units[u]);
+}
+#endif
+
+static void gather_net(void) {
+#ifdef __linux__
+  FILE *fp = fopen("/proc/net/dev", "r");
+  if (!fp)
+    return;
+  char buf[NEXUS_MAX_LINE_LEN];
+  unsigned long long rx = 0, tx = 0;
+  while (fgets(buf, sizeof(buf), fp)) {
+    char *colon = strchr(buf, ':');
+    if (!colon || colon == buf)
+      continue;
+    if (strncmp(buf, "lo ", 3) == 0)
+      continue;
+    unsigned long long r = 0, t = 0;
+    /* Receive: bytes packets errs drop fifo frame compressed multicast, then
+     * the transmit byte counter. */
+    if (sscanf(colon + 1, " %llu %*s %*s %*s %*s %*s %*s %*s %llu", &r, &t) ==
+        2) {
+      rx += r;
+      tx += t;
+    }
+  }
+  fclose(fp);
+
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  double now = (double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0;
+  static double prev_t = 0.0;
+  static unsigned long long prev_rx = 0, prev_tx = 0;
+
+  char down[32] = "0 B/s", up[32] = "0 B/s";
+  if (prev_t > 0.0) {
+    double dt = now - prev_t;
+    if (dt > 0.0) {
+      if (rx >= prev_rx)
+        format_rate(down, sizeof(down), (double)(rx - prev_rx) / dt);
+      if (tx >= prev_tx)
+        format_rate(up, sizeof(up), (double)(tx - prev_tx) / dt);
+    }
+  }
+  prev_t = now;
+  prev_rx = rx;
+  prev_tx = tx;
+
+  info_emit_live("net", "Network", "%s down, %s up", down, up);
+#endif
+}
+
+/* Everything that is worth re-reading while the logo spins. */
+static void gather_live(void) {
+  gather_uptime();
+  gather_memory();
+  gather_swap();
+  gather_disk();
+  gather_cpu_usage();
+  gather_load();
+  gather_net();
 }
 
 /* -------------------------------------------------------- placeholders */
@@ -958,10 +1150,14 @@ static void nexus_expand_placeholders(const char *src, char *out, size_t n) {
             val = title_user;
           else if (strcmp(name, "hostname") == 0)
             val = title_host;
-          else
+          else {
             for (int i = 0; i < entry_count && !val; i++)
               if (strcmp(entries[i].field, name) == 0)
                 val = entries[i].value;
+            for (int i = 0; i < live_count && !val; i++)
+              if (strcmp(live_entries[i].field, name) == 0)
+                val = live_entries[i].value;
+          }
           if (val) {
             size_t vl = strlen(val);
             if (o + vl >= n)
@@ -1003,9 +1199,10 @@ static void emit_palette(void) {
 static int is_known_field(const char *name) {
   static const char *known[] = {"title",  "os",     "host",  "kernel",
                                 "uptime", "age",    "packages", "nix",
-                                "shell",  "cpu",    "gpu",    "memory",
-                                "swap",   "disk",   "custom", "palette",
-                                "all",    NULL};
+                                "shell",  "cpu",    "gpu",    "cpu_usage",
+                                "load",   "net",    "memory", "swap",
+                                "disk",   "custom", "palette", "all",
+                                NULL};
   for (int i = 0; known[i]; i++)
     if (strcmp(name, known[i]) == 0)
       return 1;
@@ -1020,6 +1217,9 @@ static void emit_field(const char *name) {
   for (int i = 0; i < entry_count; i++)
     if (strcmp(entries[i].field, name) == 0)
       add_line(entries[i].line);
+  for (int i = 0; i < live_count; i++)
+    if (strcmp(live_entries[i].field, name) == 0)
+      add_line(live_entries[i].line);
 }
 
 static void emit_custom(void) {
@@ -1049,32 +1249,21 @@ static int nix_requested(const char *fields) {
   return 0;
 }
 
-void info_gather_all(const char *fields, int show_palette) {
-  entry_count = 0;
-  gather_title();
-  gather_os();
-  gather_host();
-  gather_kernel();
-  gather_uptime();
-  gather_age();
-  gather_packages();
-  if (nix_requested(fields))
-    gather_nix();
-  gather_shell();
-  gather_cpu();
-  gather_gpu();
-  gather_memory();
-  gather_swap();
-  gather_disk();
+/* The resolved order and palette setting are remembered so info_refresh_live()
+ * can rebuild the block exactly as it was first laid out. */
+static char order_store[512] = "";
+static int palette_store = 0;
 
-  info_line_count = 0;
+static const char *DEFAULT_ORDER = "title os host kernel uptime age packages "
+                                   "shell cpu gpu memory swap disk custom "
+                                   "palette";
 
-  static const char *DEFAULT_ORDER = "title os host kernel uptime age packages "
-                                     "shell cpu gpu memory swap disk custom "
-                                     "palette";
-
-  const char *order = (fields && fields[0]) ? fields : DEFAULT_ORDER;
+/* Lay out the current entries (static + live) as info_lines. */
+static void rebuild_info_lines(void) {
+  const char *order = order_store;
+  int show_palette = palette_store;
   int custom_done = 0, palette_done = 0;
+  info_line_count = 0;
 
   char work[512];
   snprintf(work, sizeof(work), "%s", order);
@@ -1116,4 +1305,35 @@ void info_gather_all(const char *fields, int show_palette) {
     emit_custom();
   if (!palette_done && show_palette)
     emit_palette();
+}
+
+void info_gather_all(const char *fields, int show_palette) {
+  entry_count = 0;
+  live_count = 0;
+
+  /* One-shot gathers: identity, distribution, package counts, hardware. */
+  gather_title();
+  gather_os();
+  gather_host();
+  gather_kernel();
+  gather_age();
+  gather_packages();
+  if (nix_requested(fields))
+    gather_nix();
+  gather_shell();
+  gather_cpu();
+  gather_gpu();
+
+  gather_live();
+
+  snprintf(order_store, sizeof(order_store), "%s",
+           (fields && fields[0]) ? fields : DEFAULT_ORDER);
+  palette_store = show_palette;
+  rebuild_info_lines();
+}
+
+void info_refresh_live(void) {
+  live_count = 0;
+  gather_live();
+  rebuild_info_lines();
 }

@@ -3,7 +3,10 @@
 A small, fast spinning 3D terminal fetch tool. `nexus` lifts an ASCII/Unicode
 logo into a height map, extrudes it into a point cloud, and renders it as a
 rotating relief with Blinn-Phong shading, with system information shown beside
-it.
+it. While the logo spins, the volatile fields (uptime, memory, swap, disk and
+the optional CPU usage, load and network fields) are re-read about once a
+second, so the info block works as a live monitor; the slow one-shot probes
+(packages, hardware, etc.) stay cached.
 
 It is a from-scratch, modular C program inspired by the single-file
 [`fetch`](https://github.com/areofyl/fetch) tool. Everything is kept minimal:

@@ -31,3 +31,7 @@ file**, which in turn wins over the built-in defaults. See
 | `--profile <name>` | Read `~/.config/nexus/<name>.json` |
 | `-h`, `--help` | Show help |
 | `-V`, `--version` | Show version |
+
+The info block refreshes live while the 3D logo spins: `uptime`, `memory`,
+`swap` and `disk` (and the optional `cpu_usage`, `load` and `net` fields) are
+re-read about once a second. `--no-spin` draws a single static frame.

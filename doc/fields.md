@@ -29,6 +29,30 @@ no duplication on NixOS unless you ask for it. Add it below `packages` with:
 ./nexus --fields "os, packages, nix, shell, cpu, memory"
 ```
 
+## Live fields
+
+While the logo spins, `uptime`, `memory`, `swap` and `disk` are re-read about
+once a second, so their numbers change as the machine's state changes. Static
+fields (OS, host, kernel, age, package counts, CPU/GPU names, shell) are gathered
+once at startup and kept cached; placeholders such as `{memory}` in custom lines
+pick up the refreshed values too.
+
+Three optional fields are available for a more monitor-like view. They are not
+in the default order, so add them explicitly:
+
+| Field | Value |
+|-------|-------|
+| `cpu_usage` | CPU utilisation since the previous refresh, from `/proc/stat` |
+| `load` | 1, 5 and 15 minute load averages |
+| `net` | Network throughput since the previous refresh (`down` / `up`) |
+
+```
+./nexus --fields "os, cpu, cpu_usage, load, net, memory, swap, disk, palette"
+```
+
+In `--no-spin` mode the logo is drawn in a single pass, so no refresh takes
+place.
+
 Choose and order the fields with `--fields` (or the `fields` key):
 
 ```

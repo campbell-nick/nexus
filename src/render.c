@@ -27,6 +27,11 @@ int stacked_info_rows = 0;
 int term_rows = 0;
 int term_cols = 0;
 
+/* Widest info block seen so far. Live values can gain or lose a digit, so we
+ * reserve the maximum width to keep the logo from shuffling sideways. Reset on
+ * a terminal resize, where a fresh measurement is needed. */
+static int info_reserved_cols = 0;
+
 static volatile sig_atomic_t term_resized = 0;
 
 /* Terminal settings saved before switching to non-canonical mode, restored on
@@ -204,12 +209,18 @@ static void render_apply_layout(int show_info) {
   }
 
   int info_cols = 0;
-  if (show_info)
+  if (show_info) {
     for (int i = 0; i < info_line_count; i++) {
       int w = nx_visible_width(info_lines[i]);
       if (w > info_cols)
         info_cols = w;
     }
+    if (info_cols > info_reserved_cols)
+      info_reserved_cols = info_cols;
+    info_cols = info_reserved_cols;
+  } else {
+    info_reserved_cols = 0;
+  }
 
   if (show_info && cols < NEXUS_ANIM_WIDTH + g_opts.gap + info_cols) {
     anim_width = cols - g_opts.gap - info_cols;
@@ -744,6 +755,7 @@ void render_run(int show_info, int use_color, int max_frames, int rotate_x,
   fflush(stdout);
 
   const int smax = shading_count - 1;
+  int refresh_frames = 0;
 
   for (int frame = 0; max_frames == 0 || frame < max_frames; frame++) {
     /* A normal keypress stops the animation; function keys and other
@@ -754,6 +766,23 @@ void render_run(int show_info, int use_color, int max_frames, int rotate_x,
     if (term_resized) {
       term_resized = 0;
       get_term_size(&term_rows, &term_cols);
+      info_reserved_cols = 0; /* remeasure for the new terminal width */
+      int old_h = render_height, old_w = anim_width;
+      int old_stacked = layout_stacked, old_clip = info_clip_cols;
+      render_apply_layout(show_info);
+      if (render_height != old_h || anim_width != old_w ||
+          layout_stacked != old_stacked || info_clip_cols != old_clip) {
+        K1 = 37.0f * logo_height / 36.0f * g_opts.size;
+        printf("\033[2J");
+        fflush(stdout);
+      }
+    }
+
+    /* Re-read the fast-changing info fields about once a second. The slow
+     * probes stay cached, so this costs a few /proc file reads per second. */
+    if (show_info && ++refresh_frames >= NEXUS_REFRESH_FRAMES) {
+      refresh_frames = 0;
+      info_refresh_live();
       int old_h = render_height, old_w = anim_width;
       int old_stacked = layout_stacked, old_clip = info_clip_cols;
       render_apply_layout(show_info);

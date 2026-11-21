@@ -27,6 +27,10 @@
 #define NEXUS_MAX_LINE_LEN 512
 #define NEXUS_MAX_CUSTOM 16
 
+/* The animation sleeps 50 ms per frame, so 20 frames is roughly one second of
+ * wall time between info refreshes. */
+#define NEXUS_REFRESH_FRAMES 20
+
 /* Render settings, all overridable from the command line. */
 struct nexus_options {
   int height; /* 0 = auto (fit the info block) */
@@ -94,10 +98,14 @@ void info_set_title(const char *format);
 void info_set_custom(const char *const *lines, int count);
 /* Gather every field, then lay the info block out in the requested order.
  * `fields` is a comma/space list of field names (title, os, host, kernel,
- * uptime, age, packages, nix, shell, cpu, gpu, memory, swap, disk, custom,
- * palette); NULL or "" uses the built-in order. `show_palette` appends the
- * colour palette unless it was placed explicitly. */
+ * uptime, age, packages, nix, shell, cpu, gpu, cpu_usage, load, net, memory,
+ * swap, disk, custom, palette); NULL or "" uses the built-in order.
+ * `show_palette` appends the colour palette unless it was placed explicitly. */
 void info_gather_all(const char *fields, int show_palette);
+/* Re-read only the fast-changing fields and rebuild info_lines using the order
+ * and palette settings remembered by info_gather_all(). The renderer calls this
+ * about once a second while the logo spins, so RAM, uptime, etc. stay live. */
+void info_refresh_live(void);
 
 /* -------------------------------------------------------------- config.c */
 /* Create ~/.config/nexus/nexus.json with a template if it does not exist. */

@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Live info while the 3D logo spins: `uptime`, `memory`, `swap` and `disk` are
+  re-read about once a second, and `{field}` placeholders in custom lines pick
+  up the refreshed values. The slow one-shot probes (packages, Nix store,
+  CPU/GPU identification) stay cached, so the refresh only costs a handful of
+  `/proc` reads. `--no-spin` still draws a single static frame.
+- Opt-in `cpu_usage`, `load` and `net` fields for a monitor-like view. They are
+  not in the default order; add them with `--fields` or the `fields` config key.
 - `--gap <n>` / `"gap"` to set the number of spaces between the logo and the
   info block (default `2`).
 - `--logo-color <sgr>` / `"logo_color"` to override a plain logo's tint with
