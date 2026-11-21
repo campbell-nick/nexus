@@ -33,6 +33,13 @@
 
         # Plain Makefile project: no configure step.
         dontConfigure = true;
+        # A local `make` leaves binaries and .o files behind. When building from
+        # a path: flake those get copied into the source tree, so make would
+        # happily install them instead of compiling fresh (and on NixOS a
+        # non-Nix binary has the wrong ELF interpreter). Always rebuild.
+        preBuild = ''
+          make clean
+        '';
         makeFlags = extraMakeFlags;
         installFlags = [ "PREFIX=${placeholder "out"}" ];
 
